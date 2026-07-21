@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Digital Brain — Cortex</title>
+  </head>
+  <body>
+    <canvas id="cortex-canvas"></canvas>
+
+    <div id="cx-title">
+      DIGITAL BRAIN · CORTEX
+      <small>a curiosity engine thinking in real time</small>
+      <div id="cx-picker">
+        <span>brain</span>
+        <select id="cx-corpus" title="choose a brain"></select>
+        <button id="cx-byo" title="build a brain from your own data">＋ your data</button>
+      </div>
+    </div>
+
+    <div id="cx-stats">
+      <span id="cx-thoughts">Thoughts: 0</span>
+      <span id="cx-neurons">Neurons: 0</span>
+      <span id="cx-synapses">Synapses: 0</span>
+      <span id="cx-leaps">Leaps: 0</span>
+    </div>
+
+    <div id="cx-thought">
+      <div class="cx-lead">THINKING ABOUT</div>
+      <div id="cx-focus">…</div>
+      <span id="cx-domain"></span>
+      <div id="cx-recent"></div>
+    </div>
+
+    <!-- prominent card that pops when the engine makes a new insight leap -->
+    <div id="cx-insight-card" class="hidden">
+      <button id="cx-insight-share" title="save this insight as a shareable image">⤴ share</button>
+      <div class="cx-insight-tag">⚡ INSIGHT</div>
+      <div id="cx-insight-pair"></div>
+      <div id="cx-insight-why"></div>
+      <div id="cx-insight-angle"></div>
+    </div>
+
+    <!-- the captured, copyable output — the toy->tool line -->
+    <div id="cx-insight-panel">
+      <div id="cx-insights-head">
+        <span>INSIGHT DIGEST · <span id="cx-insight-count">0</span>/<span id="cx-insight-total">0</span></span>
+        <span class="cx-digest-btns">
+          <button id="cx-insights-all" title="reveal every insight now — the full artifact">⚡ all</button>
+          <button id="cx-insights-copy" title="copy the digest">copy</button>
+          <button id="cx-insights-download" title="download the digest (.md)">↓ md</button>
+        </span>
+      </div>
+      <div id="cx-insights-log"></div>
+    </div>
+
+    <div id="cx-controls">
+      <button id="cx-snapshot" title="save a snapshot of the brain">⤓ snapshot</button>
+    </div>
+
+    <div class="cx-hint">drag to orbit · scroll to zoom</div>
+
+    <!-- zero-install: build a brain from your own data, embedded locally -->
+    <div id="cx-drop" class="hidden">
+      <div id="cx-drop-panel">
+        <button id="cx-drop-close" title="close">×</button>
+        <h2>Build a brain from your data</h2>
+        <p class="cx-drop-sub">Drop notes, docs, or an AI-agent trace (.md, .txt, .json, .jsonl).
+          Embedded <b>locally in your browser</b> — your data is never uploaded, and the embedding
+          model runs from files <b>bundled with this app</b> (no CDN, nothing fetched over the network).
+          API keys &amp; tokens are auto-redacted before anything is shown or shared.</p>
+        <div id="cx-dropzone">
+          <div>drop files here</div>
+          <div class="cx-or">or</div>
+          <div class="cx-drop-btns">
+            <button id="cx-pick-folder">choose a folder</button>
+            <button id="cx-pick-files">choose files</button>
+          </div>
+        </div>
+        <textarea id="cx-paste" placeholder="…or paste text (notes, a transcript) — split on blank lines"></textarea>
+        <div class="cx-drop-actions">
+          <button id="cx-build">Build brain →</button>
+          <span id="cx-drop-progress"></span>
+        </div>
+        <div id="cx-drop-msg"></div>
+        <input id="cx-file-folder" type="file" webkitdirectory multiple hidden />
+        <input id="cx-file-files" type="file" multiple hidden />
+      </div>
+    </div>
+
+    <script type="module" src="/src/cortex.ts"></script>
+  </body>
+</html>
