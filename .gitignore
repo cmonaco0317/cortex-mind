@@ -1,3 +1,13 @@
 node_modules/
 dist/
 .DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# agent-insights: personal, regenerable output — NEVER commit
+agent-insights/metrics.json
+agent-insights/cards.json
+agent-insights/cards.html

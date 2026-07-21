@@ -80,6 +80,28 @@ whole digest as Markdown, or export any card as a watermarked share image.
   [`frontend/public/`](frontend/public); see [PROVENANCE](frontend/public/models/PROVENANCE.md)
   for exact files, sources, and licenses. Nothing is fetched at runtime.
 
+## Also in this repo
+
+Two extra, fully local tools ship alongside the web app:
+
+### `agent-insights/` — read your own Claude Code sessions
+
+A zero-dependency Python pipeline that turns your Claude Code `.jsonl` history into
+one named **archetype** ("The Pouncer," "The Director," "The Surgeon"…) and a set of
+ranked, shareable *"how you actually work with your AI agent"* cards — computed
+entirely on your machine. It emits **aggregate stats only**: file paths are one-way
+hashed, model names are collapsed to a coarse family, no prompt text is ever stored,
+and a privacy tripwire hard-fails the run if anything path- or secret-shaped would be
+written. See [`agent-insights/README.md`](agent-insights/README.md).
+
+### `build_brain.py` — pre-bake a brain from a folder of notes (optional)
+
+A local CLI that embeds a folder of markdown/text with a local model (Ollama
+`nomic-embed-text`) and writes a brain JSON the web app can load — for when you'd
+rather build the graph offline than in the browser. `blind_test.py` +
+`corpus_safe.json` are a self-contained blind A/B harness for sanity-checking that
+the curiosity engine's leaps beat a plain cosine-similarity baseline.
+
 ## License
 
 Cortex's own code is [MIT](LICENSE). Vendored components keep their own licenses:

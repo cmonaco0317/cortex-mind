@@ -1,0 +1,1424 @@
+[
+  {
+    "id": "transformer",
+    "label": "Transformer",
+    "domain": "ai",
+    "text": "The neural architecture behind modern language models, built entirely from stacked self-attention and feedforward layers. It processes sequences in parallel, letting every token weigh every other token, and scales gracefully into the billions of parameters."
+  },
+  {
+    "id": "attention-mechanism",
+    "label": "Attention (ML)",
+    "domain": "ai",
+    "text": "A learned mechanism that lets a model dynamically weigh which parts of its input matter most for each output, computing relevance scores across tokens. It echoes selective attention in the brain, allocating limited capacity to the most salient signals."
+  },
+  {
+    "id": "self-attention",
+    "label": "Self-Attention",
+    "domain": "ai",
+    "text": "Each element of a sequence attends to all others, mixing information by similarity of learned query and key vectors. This all-to-all interaction lets meaning emerge from context rather than from fixed word order."
+  },
+  {
+    "id": "multi-head-attention",
+    "label": "Multi-Head Attention",
+    "domain": "ai",
+    "text": "Running several attention operations in parallel, each head learns to focus on a different kind of relationship, such as syntax, coreference, or long-range dependency, and their outputs are concatenated into a richer representation."
+  },
+  {
+    "id": "embedding-vector",
+    "label": "Embedding",
+    "domain": "ai",
+    "text": "A dense numerical vector that encodes the meaning of a word, image, or concept as a point in high-dimensional space, so that semantically similar things sit near one another. Embeddings are the bridge between raw symbols and geometry."
+  },
+  {
+    "id": "token",
+    "label": "Token",
+    "domain": "ai",
+    "text": "The atomic unit a language model reads and predicts, often a word fragment rather than a whole word. Text is chopped into tokens the way perception chunks a continuous stream into discrete, reusable pieces."
+  },
+  {
+    "id": "tokenization",
+    "label": "Tokenization",
+    "domain": "ai",
+    "text": "The process of splitting raw text into tokens using a learned vocabulary, balancing granularity against sequence length. It parallels how cognition segments continuous input into manageable, recombinable chunks."
+  },
+  {
+    "id": "gradient-descent",
+    "label": "Gradient Descent",
+    "domain": "ai",
+    "text": "The workhorse optimization method that nudges a model's parameters downhill along the slope of a loss surface, step by step, until error is minimized. It is learning reframed as rolling toward the nearest valley."
+  },
+  {
+    "id": "backpropagation",
+    "label": "Backpropagation",
+    "domain": "ai",
+    "text": "The algorithm that assigns credit and blame across a network by propagating error gradients backward through every layer via the chain rule, telling each weight how it should change to reduce the loss."
+  },
+  {
+    "id": "neural-network",
+    "label": "Neural Network",
+    "domain": "ai",
+    "text": "A layered web of simple weighted units loosely inspired by biological neurons, which learns to map inputs to outputs by adjusting connection strengths. Complex behavior emerges from many trivial nonlinear steps."
+  },
+  {
+    "id": "large-language-model",
+    "label": "Large Language Model",
+    "domain": "ai",
+    "text": "A transformer trained on vast text to predict the next token, which as a side effect acquires broad knowledge, reasoning, and language skill. Capabilities emerge with scale that were never explicitly programmed in."
+  },
+  {
+    "id": "fine-tuning",
+    "label": "Fine-Tuning",
+    "domain": "ai",
+    "text": "Adapting a pretrained model to a narrower task or style by continuing training on a smaller dataset, reshaping existing weights rather than starting over. It is a form of plasticity: specializing without forgetting the foundation."
+  },
+  {
+    "id": "pretraining",
+    "label": "Pretraining",
+    "domain": "ai",
+    "text": "The initial, expensive phase where a model absorbs general structure from huge unlabeled corpora, building reusable representations before any task-specific tuning, much as early development lays down broad priors."
+  },
+  {
+    "id": "reinforcement-learning",
+    "label": "Reinforcement Learning",
+    "domain": "ai",
+    "text": "Learning by trial and error, where an agent takes actions, receives rewards, and adjusts its policy to maximize long-term return. Its reward signals mirror dopamine-driven learning in the brain."
+  },
+  {
+    "id": "reward-model",
+    "label": "Reward Model",
+    "domain": "ai",
+    "text": "A learned proxy that scores how good an output is, standing in for human judgment so that a policy can be optimized against it. Like a learned taste, it can also be gamed if the proxy diverges from true value."
+  },
+  {
+    "id": "rlhf",
+    "label": "RLHF",
+    "domain": "ai",
+    "text": "Reinforcement learning from human feedback, where human preference rankings train a reward model that then shapes a language model's behavior toward being helpful, honest, and harmless."
+  },
+  {
+    "id": "emergence-ai",
+    "label": "Emergent Capabilities",
+    "domain": "ai",
+    "text": "Abilities that appear abruptly in large models once scale crosses a threshold, absent in smaller versions and never directly trained. A striking instance of the whole exceeding the sum of its parameters."
+  },
+  {
+    "id": "ai-alignment",
+    "label": "Alignment",
+    "domain": "ai",
+    "text": "The problem of ensuring an AI system's goals and behavior track human values and intentions, even as it grows more capable. It sits at the meeting point of optimization, ethics, and control."
+  },
+  {
+    "id": "agent",
+    "label": "AI Agent",
+    "domain": "ai",
+    "text": "A system that perceives, plans, and acts over multiple steps toward a goal, often invoking tools and reacting to feedback. Agency turns a passive predictor into something that pursues objectives in a world."
+  },
+  {
+    "id": "tool-use",
+    "label": "Tool Use",
+    "domain": "ai",
+    "text": "When a model calls external functions, search, or code execution to extend its abilities beyond what its weights alone can do. It mirrors how minds offload computation onto instruments and the environment."
+  },
+  {
+    "id": "rag",
+    "label": "Retrieval-Augmented Generation",
+    "domain": "ai",
+    "text": "A pattern that fetches relevant documents from an external store and feeds them into a model's context before it answers, grounding generation in retrieved facts, much like recalling a memory before speaking."
+  },
+  {
+    "id": "diffusion-model",
+    "label": "Diffusion Model",
+    "domain": "ai",
+    "text": "A generative model that learns to reverse a gradual noising process, sculpting coherent images or audio out of pure noise step by step. The denoising trajectory resembles a dream condensing into form."
+  },
+  {
+    "id": "generative-model",
+    "label": "Generative Model",
+    "domain": "ai",
+    "text": "A model that learns the distribution of data well enough to synthesize new samples, whether text, images, or sound. Generation is recombination: producing novel instances from absorbed structure."
+  },
+  {
+    "id": "latent-space",
+    "label": "Latent Space",
+    "domain": "ai",
+    "text": "The compressed internal coordinate system a model learns, where each dimension captures some abstract factor of variation and nearby points share meaning. Traversing it smoothly morphs one concept into another."
+  },
+  {
+    "id": "loss-function",
+    "label": "Loss Function",
+    "domain": "ai",
+    "text": "The scalar measure of how wrong a model's predictions are, defining the landscape that training descends. Choosing the loss is choosing what the system will come to care about."
+  },
+  {
+    "id": "overfitting",
+    "label": "Overfitting",
+    "domain": "ai",
+    "text": "When a model memorizes training noise instead of the underlying pattern, performing well on seen data but failing to generalize. It is the failure to abstract, mistaking specifics for principles."
+  },
+  {
+    "id": "regularization",
+    "label": "Regularization",
+    "domain": "ai",
+    "text": "Techniques that discourage a model from becoming too complex or confident, favoring simpler explanations that generalize. It bakes a preference for parsimony into learning."
+  },
+  {
+    "id": "transfer-learning",
+    "label": "Transfer Learning",
+    "domain": "ai",
+    "text": "Reusing knowledge learned on one task to accelerate learning on another, so representations built for one problem seed competence in a related one, echoing how humans transfer skills across domains."
+  },
+  {
+    "id": "few-shot-learning",
+    "label": "Few-Shot Learning",
+    "domain": "ai",
+    "text": "The ability to grasp a new task from only a handful of examples, leaning on rich prior structure. It reflects how strong priors let both minds and models learn fast from little."
+  },
+  {
+    "id": "in-context-learning",
+    "label": "In-Context Learning",
+    "domain": "ai",
+    "text": "A large model's ability to learn a task on the fly from examples placed in its prompt, without any weight updates, as if the context window were a scratchpad of temporary working memory."
+  },
+  {
+    "id": "chain-of-thought",
+    "label": "Chain of Thought",
+    "domain": "ai",
+    "text": "Prompting or training a model to reason step by step in writing before answering, which unlocks harder problem solving. Externalized intermediate steps act like a mind thinking aloud."
+  },
+  {
+    "id": "hallucination-ai",
+    "label": "Hallucination",
+    "domain": "ai",
+    "text": "When a model generates fluent but false or ungrounded content, filling gaps with plausible invention. It parallels confabulation, where a system produces a confident story its evidence does not support."
+  },
+  {
+    "id": "vector-database",
+    "label": "Vector Database",
+    "domain": "ai",
+    "text": "A store that indexes embeddings and retrieves the nearest ones to a query by geometric similarity, powering semantic search and memory for AI systems, an associative recall over meaning rather than keywords."
+  },
+  {
+    "id": "cosine-similarity",
+    "label": "Cosine Similarity",
+    "domain": "ai",
+    "text": "A measure of how aligned two vectors are by the angle between them, widely used to judge semantic closeness of embeddings. Small angle, related meaning; orthogonal, unrelated."
+  },
+  {
+    "id": "dropout",
+    "label": "Dropout",
+    "domain": "ai",
+    "text": "A regularizer that randomly silences neurons during training so the network cannot rely on any single unit, forcing redundant, robust representations reminiscent of distributed neural coding."
+  },
+  {
+    "id": "activation-function",
+    "label": "Activation Function",
+    "domain": "ai",
+    "text": "The nonlinearity applied at each unit, such as ReLU or sigmoid, that lets networks approximate complex functions. Without it, stacked layers would collapse into a single linear map."
+  },
+  {
+    "id": "softmax",
+    "label": "Softmax",
+    "domain": "ai",
+    "text": "A function that turns a vector of scores into a probability distribution, sharpening the largest values while keeping everything positive and summing to one. It is the model's way of choosing among options."
+  },
+  {
+    "id": "autoencoder",
+    "label": "Autoencoder",
+    "domain": "ai",
+    "text": "A network trained to compress input into a bottleneck and reconstruct it, forcing a compact code that captures the data's essential structure, a self-supervised route to representation."
+  },
+  {
+    "id": "convolutional-network",
+    "label": "Convolutional Network",
+    "domain": "ai",
+    "text": "A vision architecture that slides learned filters across an image to detect local patterns, building from edges to objects. Its receptive fields deliberately echo the visual cortex."
+  },
+  {
+    "id": "recurrent-network",
+    "label": "Recurrent Network",
+    "domain": "ai",
+    "text": "A network that processes sequences one step at a time while carrying a hidden state forward, giving it a form of memory. Long dependencies strain it, which motivated attention-based successors."
+  },
+  {
+    "id": "context-window",
+    "label": "Context Window",
+    "domain": "ai",
+    "text": "The span of tokens a model can attend to at once, its momentary field of view. Everything outside it is invisible unless retrieved, making it the model's working memory."
+  },
+  {
+    "id": "temperature-sampling",
+    "label": "Temperature",
+    "domain": "ai",
+    "text": "A knob that controls randomness when sampling a model's outputs, flattening or sharpening the probability distribution. High temperature invites surprising, divergent generations; low keeps it safe."
+  },
+  {
+    "id": "scaling-laws",
+    "label": "Scaling Laws",
+    "domain": "ai",
+    "text": "Empirical curves showing that model performance improves predictably as data, parameters, and compute grow together. They turned capability into something you can forecast and budget for."
+  },
+  {
+    "id": "word2vec",
+    "label": "Word Embeddings",
+    "domain": "ai",
+    "text": "An early method that learned word vectors from co-occurrence so that arithmetic on them captured analogies, revealing that meaning could be geometry. It seeded the whole embedding paradigm."
+  },
+  {
+    "id": "representation-learning",
+    "label": "Representation Learning",
+    "domain": "ai",
+    "text": "The pursuit of features that make downstream tasks easy, learned automatically rather than hand-engineered. Good representations disentangle the world into useful, reusable factors."
+  },
+  {
+    "id": "self-supervised-learning",
+    "label": "Self-Supervised Learning",
+    "domain": "ai",
+    "text": "Training without human labels by inventing prediction tasks from the data itself, such as filling in masked words. It mirrors how brains learn from the structure of experience alone."
+  },
+  {
+    "id": "knowledge-distillation",
+    "label": "Knowledge Distillation",
+    "domain": "ai",
+    "text": "Compressing a large teacher model into a smaller student by training the student to mimic the teacher's soft outputs, transferring nuance that hard labels would lose."
+  },
+  {
+    "id": "mixture-of-experts",
+    "label": "Mixture of Experts",
+    "domain": "ai",
+    "text": "An architecture where a router sends each input to a few specialized subnetworks, so the model can be huge in total yet cheap per token. Specialization with a gating switchboard."
+  },
+  {
+    "id": "catastrophic-forgetting",
+    "label": "Catastrophic Forgetting",
+    "domain": "ai",
+    "text": "The tendency of a network to erase old skills when trained on new tasks, overwriting the weights that stored them. It is the artificial shadow of interference in biological memory."
+  },
+  {
+    "id": "prompt-engineering",
+    "label": "Prompt Engineering",
+    "domain": "ai",
+    "text": "The craft of phrasing inputs to steer a model's behavior, exploiting how context primes its responses. Small wording changes can flip the meaning the model settles into."
+  },
+  {
+    "id": "world-model",
+    "label": "World Model",
+    "domain": "ai",
+    "text": "An internal predictive model of how an environment evolves, letting an agent imagine consequences before acting. It links machine planning to the brain's simulations of possible futures."
+  },
+  {
+    "id": "attention-head",
+    "label": "Attention Head Circuits",
+    "domain": "ai",
+    "text": "Individual attention heads that learn interpretable jobs, like tracking the previous token or matching brackets. Studying them is a kind of neuroscience for artificial networks."
+  },
+  {
+    "id": "gradient-vanishing",
+    "label": "Vanishing Gradients",
+    "domain": "ai",
+    "text": "When error signals shrink toward zero as they flow back through many layers, stalling learning in deep or recurrent networks. Architectural tricks like skip connections keep the signal alive."
+  },
+  {
+    "id": "overparameterization",
+    "label": "Overparameterization",
+    "domain": "ai",
+    "text": "The counterintuitive regime where models with far more parameters than data still generalize well, because optimization finds smooth, simple solutions among the many that fit."
+  },
+  {
+    "id": "neuron",
+    "label": "Neuron",
+    "domain": "neuro",
+    "text": "The brain's fundamental signaling cell, which integrates thousands of inputs on its dendrites and fires an electrical spike down its axon when excitation crosses threshold. Billions of them, wired densely, give rise to mind."
+  },
+  {
+    "id": "synapse",
+    "label": "Synapse",
+    "domain": "neuro",
+    "text": "The junction where one neuron passes a signal to the next, usually by releasing neurotransmitter across a tiny gap. Its adjustable strength is where learning is physically stored, the biological analog of a weighted connection."
+  },
+  {
+    "id": "dendrite",
+    "label": "Dendrite",
+    "domain": "neuro",
+    "text": "The branching input structures of a neuron that collect signals from thousands of synapses and perform local computation before the cell decides whether to fire. A single dendrite is itself a small processor."
+  },
+  {
+    "id": "axon",
+    "label": "Axon",
+    "domain": "neuro",
+    "text": "The long fiber that carries a neuron's output spike away from the cell body to distant targets, sometimes across the whole brain. Wrapped in myelin, it transmits signals fast and reliably."
+  },
+  {
+    "id": "action-potential",
+    "label": "Action Potential",
+    "domain": "neuro",
+    "text": "The brief, all-or-nothing electrical spike a neuron fires when its membrane crosses threshold, the currency of neural communication. Information rides in the timing and rate of these pulses."
+  },
+  {
+    "id": "neurotransmitter",
+    "label": "Neurotransmitter",
+    "domain": "neuro",
+    "text": "A chemical messenger released at synapses to excite or inhibit the receiving neuron, including glutamate, GABA, and dopamine. These molecules translate electrical spikes into cell-to-cell influence."
+  },
+  {
+    "id": "dopamine",
+    "label": "Dopamine",
+    "domain": "neuro",
+    "text": "A neurotransmitter central to reward, motivation, and learning, whose bursts signal that outcomes were better than expected. This reward-prediction-error signal directly inspired reinforcement learning."
+  },
+  {
+    "id": "serotonin",
+    "label": "Serotonin",
+    "domain": "neuro",
+    "text": "A neuromodulator that shapes mood, patience, and the valuation of time, influencing whether an animal waits for larger later rewards. It tunes the emotional weather in which cognition unfolds."
+  },
+  {
+    "id": "acetylcholine",
+    "label": "Acetylcholine",
+    "domain": "neuro",
+    "text": "A neuromodulator that boosts attention and marks moments worth learning from, gating plasticity toward salient events. It helps the brain decide when the world just changed enough to encode."
+  },
+  {
+    "id": "gaba",
+    "label": "GABA",
+    "domain": "neuro",
+    "text": "The brain's main inhibitory neurotransmitter, which quiets neurons and sculpts activity by suppressing noise. Balanced against excitation, it keeps networks from runaway firing and seizure."
+  },
+  {
+    "id": "glutamate",
+    "label": "Glutamate",
+    "domain": "neuro",
+    "text": "The brain's dominant excitatory neurotransmitter, driving the fast signaling and synaptic strengthening that underlie learning and memory. Too much of it, though, is toxic to neurons."
+  },
+  {
+    "id": "cortex",
+    "label": "Cerebral Cortex",
+    "domain": "neuro",
+    "text": "The brain's folded outer sheet of layered neurons, seat of perception, reasoning, language, and planning. Its repeating columnar circuits are often read as a general-purpose learning fabric."
+  },
+  {
+    "id": "hippocampus",
+    "label": "Hippocampus",
+    "domain": "neuro",
+    "text": "A seahorse-shaped structure essential for forming new episodic memories and for spatial navigation. It rapidly binds experiences before they are gradually consolidated into the cortex."
+  },
+  {
+    "id": "amygdala",
+    "label": "Amygdala",
+    "domain": "neuro",
+    "text": "An almond-shaped hub that tags experiences with emotional salience, especially fear, and steers attention and memory toward what matters for survival. It gives events their affective weight."
+  },
+  {
+    "id": "prefrontal-cortex",
+    "label": "Prefrontal Cortex",
+    "domain": "neuro",
+    "text": "The front of the brain that supports planning, working memory, self-control, and abstract goals. It holds information online and overrides impulses, the executive that steers behavior."
+  },
+  {
+    "id": "cerebellum",
+    "label": "Cerebellum",
+    "domain": "neuro",
+    "text": "A densely packed structure behind the brainstem that fine-tunes movement, timing, and increasingly cognition through error-driven learning. It refines predictions and smooths action."
+  },
+  {
+    "id": "thalamus",
+    "label": "Thalamus",
+    "domain": "neuro",
+    "text": "The central relay that routes sensory and motor signals to the cortex and back, gating what reaches awareness. It sits at the crossroads of nearly every cortical loop."
+  },
+  {
+    "id": "basal-ganglia",
+    "label": "Basal Ganglia",
+    "domain": "neuro",
+    "text": "Deep nuclei that select actions and learn habits through dopamine-driven reinforcement, choosing which behaviors to release and which to suppress. A biological actor-critic for decision making."
+  },
+  {
+    "id": "synaptic-plasticity",
+    "label": "Synaptic Plasticity",
+    "domain": "neuro",
+    "text": "The capacity of synapses to strengthen or weaken with experience, the cellular basis of learning and memory. Adjusting these connection weights is nature's version of training a network."
+  },
+  {
+    "id": "long-term-potentiation",
+    "label": "Long-Term Potentiation",
+    "domain": "neuro",
+    "text": "A lasting strengthening of a synapse after correlated activity, widely seen as a physical trace of memory. It operationalizes the idea that neurons that fire together wire together."
+  },
+  {
+    "id": "hebbian-learning",
+    "label": "Hebbian Learning",
+    "domain": "neuro",
+    "text": "The principle that when one neuron repeatedly helps fire another, their connection strengthens, summarized as cells that fire together wire together. It is the oldest bridge between neuroscience and learning rules."
+  },
+  {
+    "id": "myelination",
+    "label": "Myelination",
+    "domain": "neuro",
+    "text": "The wrapping of axons in fatty insulation that dramatically speeds and synchronizes signal transmission. Its slow maturation shapes how fast and coordinated a developing brain can compute."
+  },
+  {
+    "id": "glial-cells",
+    "label": "Glial Cells",
+    "domain": "neuro",
+    "text": "The non-neuronal support cells that feed neurons, prune synapses, form myelin, and regulate the chemical milieu. Once dismissed as glue, they are now seen as active partners in computation."
+  },
+  {
+    "id": "neural-oscillation",
+    "label": "Neural Oscillations",
+    "domain": "neuro",
+    "text": "Rhythmic fluctuations in the collective activity of neural populations, from slow delta to fast gamma, that coordinate communication and time-stamp processing. Brain rhythms bind distributed activity into coherent moments."
+  },
+  {
+    "id": "default-mode-network",
+    "label": "Default Mode Network",
+    "domain": "neuro",
+    "text": "A set of brain regions most active when the mind is not focused outward, engaged during daydreaming, remembering, and imagining. It is the neural signature of inward, self-generated thought."
+  },
+  {
+    "id": "gamma-waves",
+    "label": "Gamma Oscillations",
+    "domain": "neuro",
+    "text": "Fast brain rhythms around forty hertz linked to focused attention, perception, and the binding of features into unified objects. Their synchrony may knit scattered signals into a single experience."
+  },
+  {
+    "id": "theta-rhythm",
+    "label": "Theta Rhythm",
+    "domain": "neuro",
+    "text": "A slower hippocampal rhythm that orchestrates the timing of memory encoding and spatial coding, providing a clock along which sequences of experience are laid down and replayed."
+  },
+  {
+    "id": "neurogenesis",
+    "label": "Neurogenesis",
+    "domain": "neuro",
+    "text": "The birth of new neurons in the adult brain, notably in the hippocampus, which supports learning, mood, and the ongoing renewal of memory circuits. Growth, not just rewiring, in the mature brain."
+  },
+  {
+    "id": "neural-coding",
+    "label": "Neural Coding",
+    "domain": "neuro",
+    "text": "How populations of neurons represent information in their firing rates, timing, and patterns. Cracking the code means reading meaning off of spikes, the brain's own embedding scheme."
+  },
+  {
+    "id": "receptive-field",
+    "label": "Receptive Field",
+    "domain": "neuro",
+    "text": "The specific slice of the sensory world a neuron responds to, such as an edge at a certain angle in a patch of vision. Hierarchies of receptive fields build simple features into complex percepts."
+  },
+  {
+    "id": "place-cell",
+    "label": "Place Cells",
+    "domain": "neuro",
+    "text": "Hippocampal neurons that fire when an animal is in a particular location, together forming an internal map of space. They show the brain literally building coordinate representations of the world."
+  },
+  {
+    "id": "mirror-neuron",
+    "label": "Mirror Neurons",
+    "domain": "neuro",
+    "text": "Neurons that fire both when an animal acts and when it watches another perform the same act, hypothesized to underlie imitation and understanding others. A possible substrate for reading minds."
+  },
+  {
+    "id": "predictive-coding",
+    "label": "Predictive Coding",
+    "domain": "neuro",
+    "text": "A theory that the brain constantly predicts incoming sensations and propagates only the errors, updating its models to minimize surprise. Perception becomes controlled hallucination checked against reality."
+  },
+  {
+    "id": "cortical-column",
+    "label": "Cortical Column",
+    "domain": "neuro",
+    "text": "A vertical microcircuit spanning the cortical layers, thought to be a repeated canonical unit of computation. If real, it hints at one algorithm reused across perception, language, and thought."
+  },
+  {
+    "id": "rem-sleep",
+    "label": "REM Sleep",
+    "domain": "neuro",
+    "text": "The sleep stage of vivid dreaming, fast brain activity, and paralyzed muscles, implicated in emotional processing and creative recombination. The brain generates rich experience from within."
+  },
+  {
+    "id": "sleep-spindle",
+    "label": "Sleep Spindles",
+    "domain": "neuro",
+    "text": "Brief bursts of oscillation during deep sleep that coordinate hippocampal and cortical replay, helping ferry fresh memories into long-term storage. Offline consolidation caught in the act."
+  },
+  {
+    "id": "memory-replay",
+    "label": "Neural Replay",
+    "domain": "neuro",
+    "text": "The reactivation of waking activity patterns during rest and sleep, often sped up and reordered, that consolidates memories and may support planning. The brain rehearses experience offline."
+  },
+  {
+    "id": "neuromodulation",
+    "label": "Neuromodulation",
+    "domain": "neuro",
+    "text": "The diffuse chemical tuning of whole circuits by messengers like dopamine, serotonin, and acetylcholine, which shift a network's gain, mood, and readiness to learn rather than carrying specific signals."
+  },
+  {
+    "id": "refractory-period",
+    "label": "Refractory Period",
+    "domain": "neuro",
+    "text": "The brief window after a neuron fires when it cannot fire again, setting a ceiling on firing rate and ensuring signals travel one way. A built-in reset that shapes neural timing."
+  },
+  {
+    "id": "connectome",
+    "label": "Connectome",
+    "domain": "neuro",
+    "text": "The complete wiring diagram of neural connections in a brain or nervous system. Mapping it is like extracting the architecture, though structure alone does not reveal the running computation."
+  },
+  {
+    "id": "blood-brain-barrier",
+    "label": "Blood-Brain Barrier",
+    "domain": "neuro",
+    "text": "A selective wall of cells that shields the brain from many bloodborne substances while admitting fuel and oxygen. It protects delicate neural chemistry from the body's fluctuations."
+  },
+  {
+    "id": "inhibition-excitation",
+    "label": "Excitation-Inhibition Balance",
+    "domain": "neuro",
+    "text": "The tug of war between neurons that drive activity and those that suppress it, kept near balance so networks stay responsive yet stable. Tip it and you get either silence or seizure."
+  },
+  {
+    "id": "neural-ensemble",
+    "label": "Neural Ensemble",
+    "domain": "neuro",
+    "text": "A group of neurons whose coordinated firing represents a specific memory, percept, or intention. Meaning lives in the pattern across the population, not in any single cell."
+  },
+  {
+    "id": "engram",
+    "label": "Engram",
+    "domain": "neuro",
+    "text": "The physical trace a memory leaves in the brain, a distributed set of neurons and strengthened synapses that can be reactivated to recall the experience. The sought-after seat of a specific memory."
+  },
+  {
+    "id": "memory",
+    "label": "Memory",
+    "domain": "cognition",
+    "text": "The capacity to encode, store, and retrieve information across time, spanning fleeting sensory traces to lifelong knowledge. It is less a recording than an active reconstruction shaped by the present."
+  },
+  {
+    "id": "working-memory",
+    "label": "Working Memory",
+    "domain": "cognition",
+    "text": "The small, fast store that holds a handful of items in mind while you manipulate them, the mental workspace of reasoning. Its narrow capacity is cognition's analog of a limited context window."
+  },
+  {
+    "id": "long-term-memory",
+    "label": "Long-Term Memory",
+    "domain": "cognition",
+    "text": "The vast, durable store of knowledge and experience, built through consolidation and reshaped by every retrieval. It holds facts, skills, and episodes across a lifetime."
+  },
+  {
+    "id": "episodic-memory",
+    "label": "Episodic Memory",
+    "domain": "cognition",
+    "text": "Memory for specific events tied to a time and place, the autobiographical replay of what happened where and when. Recalling it feels like mentally traveling back into an experience."
+  },
+  {
+    "id": "semantic-memory",
+    "label": "Semantic Memory",
+    "domain": "cognition",
+    "text": "The web of general facts and concepts stripped of when you learned them, from word meanings to how the world works. Its associative structure resembles a network of embeddings."
+  },
+  {
+    "id": "attention-cognition",
+    "label": "Attention",
+    "domain": "cognition",
+    "text": "The mind's spotlight, selecting a fraction of available information for deeper processing while the rest fades. Limited and precious, it decides what enters awareness and shapes what is learned."
+  },
+  {
+    "id": "selective-attention",
+    "label": "Selective Attention",
+    "domain": "cognition",
+    "text": "The ability to focus on one stream while filtering out competing ones, like following a single voice in a noisy room. It reveals attention as a competition resolved by relevance."
+  },
+  {
+    "id": "perception",
+    "label": "Perception",
+    "domain": "cognition",
+    "text": "The construction of a stable, meaningful experience from noisy, ambiguous sensory input. Far from passive reception, it is an inference that fills gaps using expectation and prior knowledge."
+  },
+  {
+    "id": "pattern-recognition",
+    "label": "Pattern Recognition",
+    "domain": "cognition",
+    "text": "The mind's knack for detecting regularities and matching new input to stored templates, from faces to melodies. It is the cognitive counterpart of what learned features do in a network."
+  },
+  {
+    "id": "association",
+    "label": "Association",
+    "domain": "cognition",
+    "text": "The linking of ideas, so that one concept calls up related ones, weaving memory into a connected web. Chains of association are how thought wanders and how retrieval finds its target."
+  },
+  {
+    "id": "memory-consolidation",
+    "label": "Consolidation",
+    "domain": "cognition",
+    "text": "The gradual stabilization of fresh, fragile memories into durable long-term form, much of it during sleep. Experience is quietly rewritten and integrated offline, sometimes emerging clearer than before."
+  },
+  {
+    "id": "salience",
+    "label": "Salience",
+    "domain": "cognition",
+    "text": "The property of standing out from the background and grabbing processing resources, whether through novelty, intensity, or relevance. What is salient is what attention and memory prioritize."
+  },
+  {
+    "id": "prediction",
+    "label": "Prediction",
+    "domain": "cognition",
+    "text": "The brain's relentless anticipation of what comes next, from the next word to the next sensation. Much of cognition is a forward-looking model tested against arriving reality."
+  },
+  {
+    "id": "prediction-error",
+    "label": "Prediction Error",
+    "domain": "cognition",
+    "text": "The mismatch between what was expected and what occurred, a teaching signal that drives updating and learning. Its dopamine-coded version links surprise directly to synaptic change."
+  },
+  {
+    "id": "surprise",
+    "label": "Surprise",
+    "domain": "cognition",
+    "text": "The response to an event that violates expectation, sharpening attention and marking the moment as worth learning from. High surprise means the world just supplied information a model lacked."
+  },
+  {
+    "id": "intuition",
+    "label": "Intuition",
+    "domain": "cognition",
+    "text": "Fast, effortless judgment that arrives without conscious reasoning, drawing on patterns absorbed through experience. It is compiled expertise, right often enough yet blind to its own biases."
+  },
+  {
+    "id": "creativity",
+    "label": "Creativity",
+    "domain": "cognition",
+    "text": "The generation of ideas that are both novel and useful, typically by recombining distant concepts in fresh ways. It thrives at the boundary where structured knowledge meets free exploration."
+  },
+  {
+    "id": "cognitive-load",
+    "label": "Cognitive Load",
+    "domain": "cognition",
+    "text": "The total demand a task places on limited mental resources, especially working memory. Exceed it and comprehension and performance break down, which is why we chunk and offload."
+  },
+  {
+    "id": "mental-model",
+    "label": "Mental Model",
+    "domain": "cognition",
+    "text": "An internal representation of how something works, used to explain, predict, and plan. We reason by running these simplified simulations, echoing an agent's internal world model."
+  },
+  {
+    "id": "schema",
+    "label": "Schema",
+    "domain": "cognition",
+    "text": "An organized framework of prior knowledge that guides how new information is interpreted and remembered. Schemas speed understanding but can also distort perception toward what we expect."
+  },
+  {
+    "id": "priming",
+    "label": "Priming",
+    "domain": "cognition",
+    "text": "When exposure to one stimulus subtly shifts the response to a later one, activating related representations below awareness. Context preloads the mind much as a prompt biases a model."
+  },
+  {
+    "id": "recall",
+    "label": "Recall",
+    "domain": "cognition",
+    "text": "Retrieving stored information without cues present, reconstructing it from partial traces. Each act of recall is generative and can reshape the memory it draws upon."
+  },
+  {
+    "id": "recognition",
+    "label": "Recognition",
+    "domain": "cognition",
+    "text": "Judging that a current stimulus matches something encountered before, an easier feat than free recall because the cue is supplied. It is matching against stored representations."
+  },
+  {
+    "id": "forgetting-curve",
+    "label": "Forgetting Curve",
+    "domain": "cognition",
+    "text": "The characteristic decay of memory over time, steep at first and then leveling, which spaced repetition counteracts. Its artificial echo is interference erasing weights in a trained network."
+  },
+  {
+    "id": "chunking",
+    "label": "Chunking",
+    "domain": "cognition",
+    "text": "Grouping individual items into larger meaningful units so more can be held in working memory. Expertise is partly the ability to chunk ever richer patterns, like tokenizing experience."
+  },
+  {
+    "id": "abstraction",
+    "label": "Abstraction",
+    "domain": "cognition",
+    "text": "Stripping away detail to capture the essence shared across instances, letting a single idea cover many cases. It is the cognitive act that good learned representations perform automatically."
+  },
+  {
+    "id": "analogy",
+    "label": "Analogy",
+    "domain": "cognition",
+    "text": "Understanding one thing through its structural similarity to another, transferring relations across domains. Analogical leaps power both discovery and the vector arithmetic of embeddings."
+  },
+  {
+    "id": "concept-formation",
+    "label": "Concept Formation",
+    "domain": "cognition",
+    "text": "The process of carving experience into categories and building the mental units of thought from examples. Concepts compress the world into reusable, nameable handles."
+  },
+  {
+    "id": "categorization",
+    "label": "Categorization",
+    "domain": "cognition",
+    "text": "Sorting things into kinds so that knowledge about the group transfers to new members. It trades detail for inferential power, letting us treat the novel as familiar."
+  },
+  {
+    "id": "decision-making",
+    "label": "Decision Making",
+    "domain": "cognition",
+    "text": "Choosing among options by weighing value, uncertainty, and cost, whether deliberately or by gut. It blends prediction, reward, and the ever-present tradeoff between exploring and exploiting."
+  },
+  {
+    "id": "cognitive-bias",
+    "label": "Cognitive Bias",
+    "domain": "cognition",
+    "text": "A systematic deviation from rational judgment arising from mental shortcuts. Biases are the predictable failure modes of fast heuristics that usually serve us well."
+  },
+  {
+    "id": "metacognition",
+    "label": "Metacognition",
+    "domain": "cognition",
+    "text": "Thinking about one's own thinking, monitoring what one knows, how confident one is, and whether to keep going. This self-model of the mind lets us allocate effort and catch errors."
+  },
+  {
+    "id": "mind-wandering",
+    "label": "Mind-Wandering",
+    "domain": "cognition",
+    "text": "The drift of attention away from the task toward spontaneous, self-generated thought. Riding the default mode network, it fuels planning, creativity, and the occasional lost hour."
+  },
+  {
+    "id": "flow-state",
+    "label": "Flow",
+    "domain": "cognition",
+    "text": "A state of absorbed, effortless focus where challenge and skill are matched and self-consciousness dissolves. Attention narrows completely and action and awareness merge."
+  },
+  {
+    "id": "dual-process",
+    "label": "Dual-Process Thinking",
+    "domain": "cognition",
+    "text": "The framework contrasting fast, automatic, intuitive thought with slow, effortful, deliberate reasoning. The two systems trade speed for accuracy, and knowing which is running matters."
+  },
+  {
+    "id": "heuristic",
+    "label": "Heuristic",
+    "domain": "cognition",
+    "text": "A mental rule of thumb that yields good-enough answers quickly by ignoring some information. Efficient and often accurate, heuristics are also the seedbed of systematic bias."
+  },
+  {
+    "id": "sensory-integration",
+    "label": "Multisensory Integration",
+    "domain": "cognition",
+    "text": "The binding of signals from different senses into a single coherent perception, so sight, sound, and touch agree on one world. The brain fuses modalities much as multimodal models fuse inputs."
+  },
+  {
+    "id": "cognitive-map",
+    "label": "Cognitive Map",
+    "domain": "cognition",
+    "text": "An internal spatial or relational representation of an environment used to navigate and plan routes. Built partly by place cells, it may generalize to mapping abstract conceptual spaces too."
+  },
+  {
+    "id": "gestalt",
+    "label": "Gestalt Perception",
+    "domain": "cognition",
+    "text": "The tendency to perceive organized wholes rather than isolated parts, grouping elements by proximity, similarity, and continuity. The whole is experienced as more than the sum of its features."
+  },
+  {
+    "id": "cognitive-dissonance",
+    "label": "Cognitive Dissonance",
+    "domain": "cognition",
+    "text": "The discomfort of holding conflicting beliefs or acting against one's values, which pushes the mind to rationalize and realign. Inconsistency itself becomes a force that reshapes thought."
+  },
+  {
+    "id": "qualia",
+    "label": "Qualia",
+    "domain": "philosophy",
+    "text": "The raw felt qualities of experience, the redness of red or the sting of pain, that seem to resist any purely functional description. They are the core of what makes consciousness puzzling."
+  },
+  {
+    "id": "consciousness",
+    "label": "Consciousness",
+    "domain": "philosophy",
+    "text": "The fact that there is something it is like to be a subject, an inner light of experience accompanying perception and thought. Explaining how and why it arises remains deeply contested."
+  },
+  {
+    "id": "hard-problem",
+    "label": "The Hard Problem",
+    "domain": "philosophy",
+    "text": "The question of why any physical processing is accompanied by subjective experience at all, rather than proceeding in the dark. It resists the functional explanations that dissolve the easy problems."
+  },
+  {
+    "id": "self-model",
+    "label": "Self-Model",
+    "domain": "philosophy",
+    "text": "The brain's internal representation of itself as a bounded agent with a perspective, which may be what a sense of self actually is. A model mistaking itself for a thing gives rise to I."
+  },
+  {
+    "id": "intentionality",
+    "label": "Intentionality",
+    "domain": "philosophy",
+    "text": "The aboutness of mental states, the way a thought or symbol can be directed at or represent something beyond itself. How mere matter comes to mean is a central puzzle of mind."
+  },
+  {
+    "id": "embodiment",
+    "label": "Embodiment",
+    "domain": "philosophy",
+    "text": "The view that cognition is shaped and even constituted by having a body that acts in a world, not just an abstract program. Thought is grounded in sensorimotor engagement."
+  },
+  {
+    "id": "free-will",
+    "label": "Free Will",
+    "domain": "philosophy",
+    "text": "The contested capacity to be the genuine author of one's choices rather than a link in a causal chain. Debates hinge on whether determinism leaves room for meaningful agency."
+  },
+  {
+    "id": "representation",
+    "label": "Mental Representation",
+    "domain": "philosophy",
+    "text": "An internal state that stands for something else and can be used in reasoning, the common currency linking minds, brains, and machines. What makes a pattern a representation is a deep question."
+  },
+  {
+    "id": "phenomenology",
+    "label": "Phenomenology",
+    "domain": "philosophy",
+    "text": "The disciplined study of experience from the first-person point of view, describing how things appear to consciousness before theorizing about their causes. It takes the felt structure of mind seriously."
+  },
+  {
+    "id": "functionalism",
+    "label": "Functionalism",
+    "domain": "philosophy",
+    "text": "The thesis that mental states are defined by their causal roles rather than their physical substrate, so mind could in principle run on silicon as well as neurons. Function, not stuff, makes the mind."
+  },
+  {
+    "id": "chinese-room",
+    "label": "The Chinese Room",
+    "domain": "philosophy",
+    "text": "A thought experiment arguing that manipulating symbols by rules yields no genuine understanding, however convincing the output. It challenges whether syntax alone can ever produce semantics."
+  },
+  {
+    "id": "turing-test",
+    "label": "The Turing Test",
+    "domain": "philosophy",
+    "text": "A proposal to sidestep defining thought by asking whether a machine's conversation is indistinguishable from a human's. It reframes mind as behavior while leaving inner experience untouched."
+  },
+  {
+    "id": "philosophical-zombie",
+    "label": "Philosophical Zombie",
+    "domain": "philosophy",
+    "text": "A hypothetical being physically identical to a person but wholly lacking inner experience, used to argue that consciousness is not entailed by physical facts alone. Its conceivability fuels the hard problem."
+  },
+  {
+    "id": "panpsychism",
+    "label": "Panpsychism",
+    "domain": "philosophy",
+    "text": "The view that experience is a fundamental and ubiquitous feature of reality, present in some minimal form even in matter. It answers the hard problem by refusing to let mind emerge from the mindless."
+  },
+  {
+    "id": "integrated-information",
+    "label": "Integrated Information",
+    "domain": "philosophy",
+    "text": "A theory proposing that consciousness corresponds to how much a system's information is unified and irreducible to its parts. It ties subjective experience to a measurable property of causal structure."
+  },
+  {
+    "id": "global-workspace",
+    "label": "Global Workspace",
+    "domain": "philosophy",
+    "text": "A theory that content becomes conscious when it is broadcast widely across the brain, made available to many processes at once. Awareness is information winning access to a shared stage."
+  },
+  {
+    "id": "binding-problem",
+    "label": "The Binding Problem",
+    "domain": "philosophy",
+    "text": "The puzzle of how separately processed features like color, shape, and motion are unified into a single coherent experience of one object. What stitches the scattered pieces into a whole?"
+  },
+  {
+    "id": "theory-of-mind",
+    "label": "Theory of Mind",
+    "domain": "philosophy",
+    "text": "The capacity to attribute beliefs, desires, and intentions to others and to oneself, enabling prediction of behavior. Modeling other minds may be as central as modeling the world."
+  },
+  {
+    "id": "symbol-grounding",
+    "label": "Symbol Grounding",
+    "domain": "philosophy",
+    "text": "The problem of how symbols get their meaning connected to real-world referents rather than merely to other symbols. It presses on whether a model manipulating tokens truly understands them."
+  },
+  {
+    "id": "mind-body-problem",
+    "label": "Mind-Body Problem",
+    "domain": "philosophy",
+    "text": "The ancient question of how mental phenomena relate to the physical brain and body. Every theory of mind is in part an answer to how experience and matter fit together."
+  },
+  {
+    "id": "reductionism",
+    "label": "Reductionism",
+    "domain": "philosophy",
+    "text": "The strategy of explaining wholes entirely in terms of their parts and lower-level laws. Its limits are tested by emergence, where higher-level order seems to demand its own account."
+  },
+  {
+    "id": "self-awareness",
+    "label": "Self-Awareness",
+    "domain": "philosophy",
+    "text": "The reflexive recognition of oneself as a distinct entity with an ongoing perspective. It layers a model of the self atop experience, enabling reflection, shame, and pride."
+  },
+  {
+    "id": "agency",
+    "label": "Agency",
+    "domain": "philosophy",
+    "text": "The capacity to originate and direct action toward one's own ends, to be a source rather than merely a conduit of causes. It marks the line between things that happen and things that are done."
+  },
+  {
+    "id": "extended-mind",
+    "label": "Extended Mind",
+    "domain": "philosophy",
+    "text": "The claim that mind can spill beyond the skull into notebooks, tools, and devices that carry cognitive load. Thinking becomes a coupling of brain and environment."
+  },
+  {
+    "id": "computationalism",
+    "label": "Computationalism",
+    "domain": "philosophy",
+    "text": "The view that cognition is fundamentally a form of computation, so the mind is what the brain computes. It underwrites the hope that thought can be reproduced in machines."
+  },
+  {
+    "id": "other-minds",
+    "label": "Problem of Other Minds",
+    "domain": "philosophy",
+    "text": "The difficulty of justifying the belief that anyone besides oneself has inner experience, given that we observe only behavior. It shadows every claim that a system, natural or artificial, is conscious."
+  },
+  {
+    "id": "emergence-philosophy",
+    "label": "Emergence (Philosophy)",
+    "domain": "philosophy",
+    "text": "The appearance of genuinely novel, higher-level properties that are not obviously predictable from the parts, such as mind from neurons. Whether such emergence is real or merely epistemic is contested."
+  },
+  {
+    "id": "self-organization",
+    "label": "Self-Organization",
+    "domain": "systems",
+    "text": "The spontaneous rise of ordered structure from local interactions without any central controller, from flocking birds to neural rhythms. Global pattern bootstraps itself out of simple rules."
+  },
+  {
+    "id": "feedback-loop",
+    "label": "Feedback Loop",
+    "domain": "systems",
+    "text": "A circuit where a system's output feeds back to influence its input, amplifying change or restoring balance. Loops of reinforcement and correction are the engines of adaptation and stability."
+  },
+  {
+    "id": "attractor",
+    "label": "Attractor",
+    "domain": "systems",
+    "text": "A state or pattern a dynamical system tends to settle into and return to after perturbation. Memories, habits, and stable percepts can all be understood as attractors in a landscape of activity."
+  },
+  {
+    "id": "phase-transition",
+    "label": "Phase Transition",
+    "domain": "systems",
+    "text": "An abrupt qualitative change in a system's behavior as a parameter crosses a critical point, like water freezing. Emergent capabilities and sudden insights can resemble such tipping points."
+  },
+  {
+    "id": "network",
+    "label": "Network",
+    "domain": "systems",
+    "text": "A web of nodes joined by links, the abstract skeleton shared by brains, societies, and neural nets. Studying its topology reveals how structure shapes flow, resilience, and function."
+  },
+  {
+    "id": "small-world-network",
+    "label": "Small-World Network",
+    "domain": "systems",
+    "text": "A network that is mostly locally clustered yet linked by a few long shortcuts, so any node reaches any other in few steps. Brains and social networks share this efficient wiring."
+  },
+  {
+    "id": "scale-free-network",
+    "label": "Scale-Free Network",
+    "domain": "systems",
+    "text": "A network dominated by a few highly connected hubs amid many sparse nodes, following a power law. Robust to random failure yet fragile if the hubs are targeted."
+  },
+  {
+    "id": "criticality",
+    "label": "Self-Organized Criticality",
+    "domain": "systems",
+    "text": "The tendency of some systems to tune themselves to the knife-edge between order and chaos, where responses span all scales. Brains near criticality may maximize their dynamic range and information capacity."
+  },
+  {
+    "id": "swarm-behavior",
+    "label": "Swarm Behavior",
+    "domain": "systems",
+    "text": "Coordinated collective action emerging from many simple agents following local rules, as in ant colonies and bird flocks. Intelligence appears at the group level that no individual possesses."
+  },
+  {
+    "id": "complexity",
+    "label": "Complexity",
+    "domain": "systems",
+    "text": "The regime between rigid order and pure randomness where rich, hard-to-predict behavior lives. Complex systems have many interacting parts whose collective dynamics exceed any simple summary."
+  },
+  {
+    "id": "nonlinearity",
+    "label": "Nonlinearity",
+    "domain": "systems",
+    "text": "The property that outputs are not proportional to inputs, so small causes can have large effects and vice versa. It underlies thresholds, tipping points, and the surprises of complex systems."
+  },
+  {
+    "id": "chaos",
+    "label": "Chaos",
+    "domain": "systems",
+    "text": "Deterministic dynamics so sensitive to initial conditions that long-term prediction becomes impossible despite fixed rules. Order and unpredictability coexist in the same system."
+  },
+  {
+    "id": "fractal",
+    "label": "Fractal",
+    "domain": "systems",
+    "text": "A structure that repeats similar patterns across scales, so zooming in reveals echoes of the whole. Branching neurons, blood vessels, and coastlines all wear this self-similar geometry."
+  },
+  {
+    "id": "self-similarity",
+    "label": "Self-Similarity",
+    "domain": "systems",
+    "text": "The recurrence of the same motif at different scales, a hallmark of fractals and of processes with no characteristic size. Part resembles whole, from dendrites to river deltas."
+  },
+  {
+    "id": "entropy",
+    "label": "Entropy",
+    "domain": "systems",
+    "text": "A measure of disorder or uncertainty in a system, and in information theory the average surprise of a source. Life and cognition are local stands against its relentless increase."
+  },
+  {
+    "id": "information",
+    "label": "Information",
+    "domain": "systems",
+    "text": "The reduction of uncertainty carried by a signal, measurable in bits regardless of medium. It is the common currency linking communication, computation, thermodynamics, and neural coding."
+  },
+  {
+    "id": "cybernetics",
+    "label": "Cybernetics",
+    "domain": "systems",
+    "text": "The science of control and communication through feedback in animals and machines alike. It framed goal-directed behavior as error correction and seeded much of AI and systems thinking."
+  },
+  {
+    "id": "homeostasis",
+    "label": "Homeostasis",
+    "domain": "systems",
+    "text": "The active maintenance of a stable internal state despite external change, through balancing feedback. From body temperature to neural excitability, it is regulation that keeps systems alive and functional."
+  },
+  {
+    "id": "autopoiesis",
+    "label": "Autopoiesis",
+    "domain": "systems",
+    "text": "A living system's capacity to continually produce and maintain itself, defining its own boundary through its own processes. It frames life, and perhaps cognition, as self-creation."
+  },
+  {
+    "id": "bifurcation",
+    "label": "Bifurcation",
+    "domain": "systems",
+    "text": "A point where a small change in a parameter causes a system's behavior to split qualitatively, birthing new stable states. It marks where gradual tuning yields sudden structural change."
+  },
+  {
+    "id": "resilience",
+    "label": "Resilience",
+    "domain": "systems",
+    "text": "A system's ability to absorb shocks and reorganize while retaining its essential function. Distributed, redundant structure lets networks bend without breaking."
+  },
+  {
+    "id": "adaptation",
+    "label": "Adaptation",
+    "domain": "systems",
+    "text": "The ongoing adjustment of a system to better fit its environment, whether by evolution, learning, or self-tuning. It is the general process of which learning is one instance."
+  },
+  {
+    "id": "stigmergy",
+    "label": "Stigmergy",
+    "domain": "systems",
+    "text": "Indirect coordination in which agents leave traces in a shared environment that guide the actions of others, like ants laying pheromone. The medium becomes the memory and the message."
+  },
+  {
+    "id": "dynamical-system",
+    "label": "Dynamical System",
+    "domain": "systems",
+    "text": "A formalism describing how a system's state evolves over time according to fixed rules. Its trajectories, attractors, and instabilities give a language for change in brains and machines alike."
+  },
+  {
+    "id": "synchronization",
+    "label": "Synchronization",
+    "domain": "systems",
+    "text": "The tendency of coupled oscillators to fall into rhythm, from fireflies flashing together to neurons firing in phase. Coordinated timing binds separate elements into a functioning collective."
+  },
+  {
+    "id": "edge-of-chaos",
+    "label": "Edge of Chaos",
+    "domain": "systems",
+    "text": "The narrow transitional zone between rigid order and turbulence where systems are most adaptive and computationally rich. Life, learning, and complex dynamics seem to favor this fertile border."
+  },
+  {
+    "id": "modularity",
+    "label": "Modularity",
+    "domain": "systems",
+    "text": "The organization of a system into semi-independent clusters that interact more within than between, easing evolution, robustness, and understanding. Brains and networks are richly modular."
+  },
+  {
+    "id": "degeneracy",
+    "label": "Degeneracy",
+    "domain": "systems",
+    "text": "The ability of structurally different components to perform the same function, giving biological systems robustness and flexibility. Many routes to the same outcome buffer against failure."
+  },
+  {
+    "id": "network-motif",
+    "label": "Network Motif",
+    "domain": "systems",
+    "text": "A small recurring wiring pattern that appears far more often than chance across a network, acting as a functional building block. Motifs are the reusable circuits of complex systems."
+  },
+  {
+    "id": "power-law",
+    "label": "Power Law",
+    "domain": "systems",
+    "text": "A relationship where one quantity scales as a power of another, producing heavy tails with no typical scale, from city sizes to neuronal avalanches. Its ubiquity hints at shared generative mechanisms."
+  },
+  {
+    "id": "percolation",
+    "label": "Percolation",
+    "domain": "systems",
+    "text": "A model of how connectivity suddenly spans a whole network once enough links are added, crossing a sharp threshold. It captures how local connections abruptly yield global reach."
+  },
+  {
+    "id": "emergent-computation",
+    "label": "Emergent Computation",
+    "domain": "systems",
+    "text": "Useful information processing that arises from the collective dynamics of simple interacting units rather than being explicitly programmed. Computation as a property of the whole, not any part."
+  },
+  {
+    "id": "feedback-delay",
+    "label": "Delayed Feedback",
+    "domain": "systems",
+    "text": "Feedback that arrives with a lag, which can destabilize otherwise steady systems and produce oscillations or overshoot. Timing, not just direction, determines whether a loop settles or swings."
+  },
+  {
+    "id": "novelty-seeking",
+    "label": "Novelty-Seeking",
+    "domain": "curiosity",
+    "text": "The drive toward the new and unfamiliar, tuned by dopamine and central to exploration and learning. Novelty carries the promise of information, and the brain treats it as intrinsically rewarding."
+  },
+  {
+    "id": "exploration-exploitation",
+    "label": "Exploration vs Exploitation",
+    "domain": "curiosity",
+    "text": "The fundamental tradeoff between trying new options to gather information and cashing in on the best known one. Every learning agent, biological or artificial, must balance the two to thrive."
+  },
+  {
+    "id": "intrinsic-motivation",
+    "label": "Intrinsic Motivation",
+    "domain": "curiosity",
+    "text": "The pull to act for the inherent satisfaction of the activity, such as curiosity or mastery, rather than for external reward. It drives exploration where explicit payoffs are absent or distant."
+  },
+  {
+    "id": "dreaming",
+    "label": "Dreaming",
+    "domain": "curiosity",
+    "text": "The vivid, associative experience generated by the sleeping brain, unconstrained by present reality, that may recombine memories and rehearse scenarios. It resembles a generative model sampling freely from its priors."
+  },
+  {
+    "id": "incubation",
+    "label": "Incubation",
+    "domain": "curiosity",
+    "text": "The phenomenon where stepping away from a problem lets an unconscious process work on it, so a solution surfaces later. Rest and diffuse attention quietly rearrange the pieces."
+  },
+  {
+    "id": "insight",
+    "label": "Insight",
+    "domain": "curiosity",
+    "text": "The sudden restructuring of a problem that snaps a solution into view, often after impasse. The abrupt shift feels like a phase transition in understanding, an aha that reorganizes everything."
+  },
+  {
+    "id": "serendipity",
+    "label": "Serendipity",
+    "domain": "curiosity",
+    "text": "The knack for making valuable discoveries by accident, when a prepared mind notices the significance in a chance encounter. Fortune favors the wide-ranging and the alert."
+  },
+  {
+    "id": "divergent-thinking",
+    "label": "Divergent Thinking",
+    "domain": "curiosity",
+    "text": "The generation of many varied ideas by branching outward from a prompt, the expansive phase of creativity before convergence prunes. It samples widely across possibility space."
+  },
+  {
+    "id": "free-association",
+    "label": "Free Association",
+    "domain": "curiosity",
+    "text": "Letting one idea lead to the next without censorship, following the natural links of memory wherever they run. It surfaces hidden connections and mirrors a model generating from loose context."
+  },
+  {
+    "id": "wonder",
+    "label": "Wonder",
+    "domain": "curiosity",
+    "text": "The awe-tinged pull toward the vast, the beautiful, or the mysterious that opens the mind and invites inquiry. It is curiosity charged with emotion, the beginning of much thought and art."
+  },
+  {
+    "id": "imagination",
+    "label": "Imagination",
+    "domain": "curiosity",
+    "text": "The capacity to conjure experiences and scenarios not present to the senses, combining stored elements into the never-yet-seen. It is the mind's generative engine for possibility and planning."
+  },
+  {
+    "id": "play",
+    "label": "Play",
+    "domain": "curiosity",
+    "text": "Freely chosen, intrinsically rewarding exploration that builds skills and models in a low-stakes way. Across species it is how the young rehearse the world and stumble onto the new."
+  },
+  {
+    "id": "daydreaming",
+    "label": "Daydreaming",
+    "domain": "curiosity",
+    "text": "Spontaneous, pleasurable mental wandering into imagined scenes and futures while awake. Powered by the default mode network, it blends memory and fantasy into rehearsal and escape."
+  },
+  {
+    "id": "aha-moment",
+    "label": "Aha Moment",
+    "domain": "curiosity",
+    "text": "The flash of sudden comprehension when a solution or connection clicks into place, often accompanied by pleasure and certainty. It is insight experienced from the inside."
+  },
+  {
+    "id": "exploration",
+    "label": "Exploration",
+    "domain": "curiosity",
+    "text": "The active search through unknown territory, physical or conceptual, to gather information and expand what is known. It trades immediate reward for the option value of discovery."
+  },
+  {
+    "id": "novelty-detection",
+    "label": "Novelty Detection",
+    "domain": "curiosity",
+    "text": "The mechanism that flags when something departs from the expected, triggering orienting, attention, and learning. It is prediction error repurposed as a compass toward the informative."
+  },
+  {
+    "id": "information-gain",
+    "label": "Information Gain",
+    "domain": "curiosity",
+    "text": "The expected reduction in uncertainty an action or observation provides, a principled currency for curiosity. Agents that seek it explore efficiently, drawn to what will teach them the most."
+  },
+  {
+    "id": "boredom",
+    "label": "Boredom",
+    "domain": "curiosity",
+    "text": "The aversive signal that a situation offers too little novelty or challenge, nudging the mind to seek stimulation elsewhere. It is a push away from the over-predictable toward the informative."
+  },
+  {
+    "id": "counterfactual-thinking",
+    "label": "Counterfactual Thinking",
+    "domain": "curiosity",
+    "text": "Imagining how things might have turned out otherwise, replaying alternatives to the actual past. It fuels learning, regret, and planning by simulating roads not taken."
+  },
+  {
+    "id": "combinatorial-creativity",
+    "label": "Combinatorial Creativity",
+    "domain": "curiosity",
+    "text": "Producing novelty by fusing existing ideas into unexpected combinations, the recombination at the heart of invention. Most new things are old things joined in a new way."
+  },
+  {
+    "id": "hypothesis-generation",
+    "label": "Hypothesis Generation",
+    "domain": "curiosity",
+    "text": "The creative leap of proposing candidate explanations to be tested, the imaginative front end of inquiry. Before evidence can decide, the mind must first dream up what to check."
+  },
+  {
+    "id": "lateral-thinking",
+    "label": "Lateral Thinking",
+    "domain": "curiosity",
+    "text": "Solving problems by approaching them from unexpected angles rather than head-on logic, deliberately breaking assumptions. It jumps sideways to reach where straight reasoning stalls."
+  },
+  {
+    "id": "mental-simulation",
+    "label": "Mental Simulation",
+    "domain": "curiosity",
+    "text": "Running an internal model forward to preview the consequences of actions or events before committing. Imagination in the service of prediction, it lets us test futures safely in the mind."
+  },
+  {
+    "id": "exploratory-drive",
+    "label": "Exploratory Drive",
+    "domain": "curiosity",
+    "text": "The built-in impulse of animals and agents to probe, sample, and manipulate their surroundings even without extrinsic reward. Curiosity as a basic motivator that seeds knowledge and competence."
+  },
+  {
+    "id": "openness",
+    "label": "Openness to Experience",
+    "domain": "curiosity",
+    "text": "The disposition toward curiosity, imagination, and receptivity to new ideas and sensations. It broadens the range of what a mind samples and correlates strongly with creativity."
+  },
+  {
+    "id": "dream-logic",
+    "label": "Dream Logic",
+    "domain": "curiosity",
+    "text": "The loose, associative, shape-shifting coherence of dreams, where scenes morph and impossible juxtapositions feel natural. It hints at generation unconstrained by the checks of waking reality."
+  },
+  {
+    "id": "epiphany",
+    "label": "Epiphany",
+    "domain": "curiosity",
+    "text": "A sudden, often life-reframing realization that reorganizes how one sees a situation or oneself. Larger than an aha moment, it can shift values and direction, not just solve a puzzle."
+  },
+  {
+    "id": "intellectual-humility",
+    "label": "Intellectual Humility",
+    "domain": "curiosity",
+    "text": "The recognition of the limits of one's knowledge, which keeps curiosity alive by treating beliefs as revisable. Knowing what one does not know is the doorway to wanting to learn."
+  },
+  {
+    "id": "serendipitous-connection",
+    "label": "Serendipitous Connection",
+    "domain": "curiosity",
+    "text": "The delightful moment when two previously unrelated ideas suddenly link, sparking insight or invention. Cross-domain bridges like these are where much originality is born."
+  },
+  {
+    "id": "plasticity",
+    "label": "Plasticity",
+    "domain": "neuro",
+    "text": "The general capacity of a nervous system, or a learning model, to change its structure and connections in response to experience. It is the shared root of biological learning and artificial fine-tuning."
+  },
+  {
+    "id": "reward-prediction-error",
+    "label": "Reward Prediction Error",
+    "domain": "neuro",
+    "text": "The dopamine-encoded difference between received and expected reward, the biological signal that reinforcement learning formalized as its update rule. One idea straddling brain and algorithm."
+  },
+  {
+    "id": "memory-as-vector",
+    "label": "Distributed Representation",
+    "domain": "cognition",
+    "text": "The idea that a memory or concept is stored not in one place but as a pattern spread across many units. It unifies neural ensembles, cognitive schemas, and machine embeddings under one principle."
+  },
+  {
+    "id": "generative-recombination",
+    "label": "Generative Recombination",
+    "domain": "curiosity",
+    "text": "The creative and dreaming process of remixing stored fragments into novel wholes, whether by an imagining mind or a sampling generative model. Dreaming and diffusion are two faces of it."
+  },
+  {
+    "id": "attention-as-resource",
+    "label": "Attention as a Limited Resource",
+    "domain": "cognition",
+    "text": "The unifying view that attention is a scarce budget allocated to the most relevant signals, whether by a brain's spotlight or a transformer's weighting. Selection under scarcity is the common thread."
+  },
+  {
+    "id": "prediction-machine",
+    "label": "The Predictive Brain",
+    "domain": "neuro",
+    "text": "The framing of the brain as a hierarchical prediction engine that constantly forecasts sensation and learns from its errors. It links neuroscience, perception, and the self-supervised objectives of AI."
+  },
+  {
+    "id": "criticality-in-brain",
+    "label": "Neuronal Avalanches",
+    "domain": "neuro",
+    "text": "Cascades of neural activity whose sizes follow a power law, evidence that the cortex may hover near a critical point. A meeting of neuroscience and complex-systems physics."
+  },
+  {
+    "id": "curiosity-as-intrinsic-reward",
+    "label": "Curiosity-Driven Learning",
+    "domain": "curiosity",
+    "text": "The AI and psychology idea of rewarding an agent for prediction error or information gain, so it explores to reduce its own uncertainty. Curiosity engineered as an intrinsic reward signal."
+  },
+  {
+    "id": "embodied-cognition",
+    "label": "Embodied Cognition",
+    "domain": "cognition",
+    "text": "The stance that thinking is grounded in bodily action and sensorimotor loops rather than abstract symbol shuffling. It ties cognition to embodiment and challenges disembodied models of mind."
+  },
+  {
+    "id": "associative-memory",
+    "label": "Associative Memory",
+    "domain": "systems",
+    "text": "A memory that retrieves a whole pattern from a partial or noisy cue by settling into a stored attractor, as in Hopfield networks. It links neural dynamics, complex systems, and content-addressable recall."
+  }
+]
