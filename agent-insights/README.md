@@ -25,6 +25,34 @@ python3 -m http.server 8899   # then open http://localhost:8899/cards.html
 
 No dependencies beyond the Python 3 standard library.
 
+## Operator Report (Edge / Tax / Move)
+
+The cards are the *descriptive*, shareable layer. `report.py` is the deeper read:
+it turns the same signals into a structured **Edge / Tax / Move** report about how
+you operate — strengths to lean into, tradeoffs you're choosing, and one one-week
+self-experiment per tradeoff — plus a self-contained `report.html` with a shareable
+"my operator edge" card.
+
+```bash
+python3 report.py metrics.json                       # writes report.html
+python3 report.py metrics.json --out-json report.json # also dump the structured data
+```
+
+It is built to be **honest, not flattering**:
+
+- **Attributed to what you did, never to whether it was good.** The data can't know
+  if your work was any good, so the report never claims it. Every judgment is tied to
+  *your* action (a turn you flagged), not to reality (a "wrong" turn).
+- **No misattribution.** It won't charge you for the model's or harness's behavior —
+  e.g. the default model, or how the transcript happens to chunk tool calls.
+- **Personalized or nothing.** Every line cites a number from *your* sessions; a claim
+  that can't cite one doesn't ship.
+- **A mandatory "what this can't know" footer**, and no cross-user comparisons (there
+  is no backend — it's self-vs-self only).
+
+Thin data gets an honest thin report; it never invents an identity from the absence
+of signal. Tested with a property-based suite (`test_report.py`): `python3 -m pytest`.
+
 ## Privacy
 
 Everything runs on your machine. The extractor emits **aggregate statistics only** —
@@ -32,8 +60,10 @@ counts, ratios, timing, tool/model mix. It never reads or emits file *contents*,
 file *paths*, project names, or your prompt text, so a card you share cannot leak
 anything about what you were working on.
 
-`metrics.json`, `cards.json`, and `cards.html` are your personal output and are
-**git-ignored** — they are regenerable and never committed.
+`metrics.json`, `cards.json`, `cards.html`, `report.json`, and `report.html` are your
+personal output and are **git-ignored** — they are regenerable and never committed.
+`report.py` runs the same privacy tripwire before it emits anything: the run hard-fails
+if any string it's about to write looks like a real path, email, or secret.
 
 ## What's solid vs. soft (honest data notes)
 

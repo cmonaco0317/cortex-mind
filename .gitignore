@@ -11,3 +11,5 @@ __pycache__/
 agent-insights/metrics.json
 agent-insights/cards.json
 agent-insights/cards.html
+agent-insights/report.json
+agent-insights/report.html
