@@ -1,0 +1,211 @@
+#!/usr/bin/env python3
+"""
+Blind A/B evaluation harness for the curiosity engine.
+
+Measures whether the engine's "insight leaps" are genuinely more novel/useful than
+what plain cosine-similarity nearest-neighbours already return. Builds a
+self-contained HTML rating sheet that puts the two BLIND, side by side, for a rater
+to judge — then scores the result.
+
+For each of ~20 source concepts it shows two connections:
+  - BASELINE: the nearest neighbour by cosine similarity (the "obvious" match).
+  - ENGINE:   a moderately-similar-but-distant concept (a non-obvious leap).
+Order is randomised and which-is-which is hidden. The rater marks which (if any)
+is a genuinely novel + useful connection. The engine passes at >=30% wins.
+
+Usage (runs 100% locally; the HTML never leaves your machine):
+  blind_test.py --corpus cortex/corpus_safe.json --out cortex/blind-test.html
+  blind_test.py --ingest ~/notes --out cortex/blind-test.html --n 20
+"""
+
+import argparse
+import html
+import json
+import os
+import sys
+
+import numpy as np
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from build_brain import embed, ingest_folder  # noqa: E402
+
+
+def load_corpus(args: argparse.Namespace) -> list[dict]:
+    if args.ingest:
+        return ingest_folder(args.ingest, args.max)
+    return json.load(open(args.corpus))
+
+
+def build_pairs(corpus: list[dict], n_rows: int, seed: int) -> list[dict]:
+    vecs = []
+    for i, c in enumerate(corpus):
+        vecs.append(embed(c.get("text") or c.get("label") or c["id"]))
+        if (i + 1) % 25 == 0 or i + 1 == len(corpus):
+            print(f"  embedded {i + 1}/{len(corpus)}", flush=True)
+    X = np.asarray(vecs, dtype=np.float64)
+    Xn = X / (np.linalg.norm(X, axis=1, keepdims=True) + 1e-9)
+    sim = Xn @ Xn.T
+    np.fill_diagonal(sim, -1.0)
+    order = np.argsort(-sim, axis=1)
+
+    rng = np.random.default_rng(seed)
+    n = len(corpus)
+    sources = rng.choice(n, size=min(n_rows, n), replace=False)
+    rows = []
+    # Every concept is used at most once across the whole test — as a source OR an
+    # answer option — so no "hub" concept recurs as an option across questions
+    # (which would bias the rater). Sources are reserved up front.
+    used: set[int] = {int(s) for s in sources}
+    for i in sources:
+        i = int(i)
+        # baseline = nearest still-unused neighbour (the "obvious" match)
+        baseline = next(
+            (int(j) for j in order[i] if int(j) not in used and int(j) != i), None
+        )
+        if baseline is None:
+            continue
+        # engine = a moderately-similar-but-distant, still-unused concept (a leap)
+        band = [
+            int(j)
+            for j in order[i, 15:50]
+            if int(j) not in used and int(j) not in (i, baseline)
+        ]
+        if not band:
+            continue
+        engine = int(rng.choice(band))
+        used.add(baseline)
+        used.add(engine)
+        rows.append({"source": i, "baseline": baseline, "engine": engine})
+    return rows
+
+
+def render_html(corpus: list[dict], rows: list[dict], name: str) -> str:
+    # Values below are inserted via textContent in the page JS, so they are NOT
+    # HTML-escaped here (escaping would render literal &#x27; etc.). Show the full
+    # concept text so the rater can judge the connection fairly.
+    def snippet(idx: int) -> str:
+        return (corpus[idx].get("text") or "").strip()
+
+    def label(idx: int) -> str:
+        return corpus[idx].get("label", corpus[idx]["id"])
+
+    # Each row ships its two options with a hidden "kind" so scoring is automatic.
+    data = []
+    for r in rows:
+        opts = [
+            {
+                "kind": "engine",
+                "label": label(r["engine"]),
+                "text": snippet(r["engine"]),
+            },
+            {
+                "kind": "baseline",
+                "label": label(r["baseline"]),
+                "text": snippet(r["baseline"]),
+            },
+        ]
+        # (order is shuffled client-side so the rater can't infer which is which)
+        data.append(
+            {
+                "source_label": label(r["source"]),
+                "source_text": snippet(r["source"]),
+                "options": opts,
+            }
+        )
+
+    payload = json.dumps(data).replace("</", "<\\/")  # safe to embed inline in <script>
+    return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Cortex — blind insight test ({html.escape(name)})</title>
+<style>
+  body{{background:#05060d;color:#cfe6f2;font:14px/1.5 -apple-system,system-ui,sans-serif;max-width:760px;margin:0 auto;padding:28px}}
+  h1{{font-size:19px;color:#9fe6ff}} .sub{{color:#5f8296;font-size:13px;margin-bottom:22px}}
+  .row{{border:1px solid rgba(80,160,200,.2);border-radius:10px;padding:16px;margin-bottom:16px}}
+  .src{{font-weight:600;color:#eafaff}} .src small{{display:block;color:#6f95a8;font-weight:400;margin-top:3px}}
+  .opts{{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}}
+  .opt{{border:1px solid rgba(80,160,200,.25);border-radius:8px;padding:10px;cursor:pointer}}
+  .opt.sel{{border-color:#4fd6f5;background:rgba(30,90,120,.3)}}
+  .opt b{{color:#bde8ff}} .opt small{{display:block;color:#6f95a8;margin-top:4px}}
+  .neither{{margin-top:8px;font-size:12px;color:#6f95a8;cursor:pointer}}
+  .neither.sel{{color:#4fd6f5}}
+  button{{background:#1c4a5e;color:#dff;border:1px solid #4fd6f5;border-radius:8px;padding:10px 20px;font-size:14px;cursor:pointer;margin-top:8px}}
+  #verdict{{margin-top:20px;padding:18px;border-radius:10px;font-size:16px;display:none}}
+  .go{{background:rgba(30,120,60,.3);border:1px solid #4ade80;color:#c6f6d5}}
+  .stop{{background:rgba(140,40,40,.3);border:1px solid #f87171;color:#fecaca}}
+</style></head><body>
+<h1>Cortex — blind insight test</h1>
+<div class="sub">For each concept, pick the connection that is a <b>genuinely novel &amp; useful</b> insight
+(better than an obvious "related item"). If neither is, pick "neither". You can't tell which is the engine — that's the point.
+Corpus: <b>{html.escape(name)}</b> · {len(rows)} items. 100% local.</div>
+<div id="rows"></div>
+<button onclick="score()">Score it</button>
+<div id="verdict"></div>
+<script>
+const DATA = {payload};
+const shuffled = DATA.map(r => {{
+  const o = r.options.slice();
+  if (Math.random() < 0.5) o.reverse();
+  return {{...r, options:o}};
+}});
+const picks = new Array(shuffled.length).fill(null);
+const root = document.getElementById('rows');
+shuffled.forEach((r,ri) => {{
+  const div = document.createElement('div'); div.className='row';
+  const src = document.createElement('div'); src.className='src';
+  src.innerHTML = '<span></span>';
+  src.firstChild.textContent = r.source_label;
+  const s2 = document.createElement('small'); s2.textContent = r.source_text; src.appendChild(s2);
+  const opts = document.createElement('div'); opts.className='opts';
+  r.options.forEach((o,oi) => {{
+    const el = document.createElement('div'); el.className='opt';
+    const b=document.createElement('b'); b.textContent=o.label;
+    const sm=document.createElement('small'); sm.textContent=o.text;
+    el.append(b,sm);
+    el.onclick=()=>{{picks[ri]={{kind:o.kind}};[...opts.children].forEach(c=>c.classList.remove('sel'));el.classList.add('sel');nb.classList.remove('sel');}};
+    opts.appendChild(el);
+  }});
+  const nb=document.createElement('div'); nb.className='neither'; nb.textContent='· neither is genuinely novel/useful';
+  nb.onclick=()=>{{picks[ri]={{kind:'neither'}};[...opts.children].forEach(c=>c.classList.remove('sel'));nb.classList.add('sel');}};
+  div.append(src,opts,nb); root.appendChild(div);
+}});
+function score(){{
+  const done = picks.filter(Boolean).length;
+  if (done < shuffled.length) {{ alert('Rate all '+shuffled.length+' items first ('+done+' done)'); return; }}
+  const engineWins = picks.filter(p=>p.kind==='engine').length;
+  const pct = Math.round(100*engineWins/shuffled.length);
+  const v = document.getElementById('verdict');
+  const go = pct >= 30;
+  v.className = go ? 'go' : 'stop';
+  v.style.display='block';
+  v.innerHTML = '<b>Engine leaps rated more novel/useful than the cosine baseline: '
+    + engineWins + '/' + shuffled.length + ' = ' + pct + '%</b><br>'
+    + (go ? '✅ PASS — the engine&apos;s leaps beat the cosine baseline at this threshold.'
+          : '🛑 FAIL — the engine&apos;s leaps did not beat the cosine baseline at this threshold.');
+}}
+</script></body></html>"""
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    src = ap.add_mutually_exclusive_group(required=True)
+    src.add_argument("--corpus")
+    src.add_argument("--ingest")
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--n", type=int, default=20, help="number of items to rate")
+    ap.add_argument("--max", type=int, default=800)
+    ap.add_argument("--seed", type=int, default=7)
+    args = ap.parse_args()
+
+    corpus = load_corpus(args)
+    print(f"corpus: {len(corpus)} concepts; embedding…", flush=True)
+    rows = build_pairs(corpus, args.n, args.seed)
+    open(args.out, "w").write(
+        render_html(corpus, rows, name=os.path.basename(args.out))
+    )
+    print(
+        f"wrote {args.out}: {len(rows)} blind rating items. Open it and rate to get the verdict."
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
