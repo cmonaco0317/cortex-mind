@@ -55,6 +55,15 @@ def fmt(n):
     return f"{n:,}"
 
 
+def _planning(m):
+    """Planning-on-paper = TodoWrite PLUS the Task* tracker family, not just
+    TodoWrite — so the 'never make a list' card can't fire for someone who tracks
+    tasks with TaskUpdate (the mislabel the review caught)."""
+    top = m.get("top_tools", {}) or {}
+    task = sum(int(top.get(k, 0)) for k in ("TaskCreate", "TaskUpdate", "TaskList"))
+    return int(m.get("todo_calls", 0)) + task
+
+
 def build_cards(m):
     cards = []
 
@@ -129,7 +138,7 @@ def build_cards(m):
             "reflex",
             f"{pounce}s",
             "You pounce faster than you could read.",
-            f"When the agent turns wrong, your median time to cut in is {pounce} seconds — 'no', 'wait', 'stop'. That's reflex, not review.",
+            f"When a turn starts to drift, your median time to cut in is {pounce} seconds — 'no', 'wait', 'stop'. That's reflex, not review.",
             94,
             "latency",
             "pounce",
@@ -158,12 +167,12 @@ def build_cards(m):
             "read_edit",
         )
 
-    if m.get("todo_calls", 1) == 0 and assistant > 500:
+    if _planning(m) == 0 and assistant > 500:
         card(
             "style",
             "0",
             "You never make a list.",
-            f"{fmt(assistant)} turns, {fmt(tool_calls)} tool calls, and not a single todo written. No plan on paper — you hold it in your head and move.",
+            f"{fmt(assistant)} turns, {fmt(tool_calls)} tool calls, and not a single todo or task-list entry. No plan on paper — you hold it in your head and move.",
             90,
             "todo",
             "todo",
@@ -196,8 +205,8 @@ def build_cards(m):
         card(
             "psyche",
             fmt(corrections),
-            "You don't let a wrong turn run.",
-            f"{fmt(corrections)} times you cut in the instant the agent started down the wrong path — 'no', 'wait', 'stop'. You watch every move.",
+            "You don't let a turn drift.",
+            f"{fmt(corrections)} times you cut in the instant a turn started heading somewhere you didn't ask for — 'no', 'wait', 'stop'. You watch every move.",
             83,
             "corrections",
             "corrections",
@@ -368,8 +377,8 @@ def compute_archetype(m):
     if m.get("corrections_caught", 0) >= 40 and rev >= 4:
         A(
             "The Pouncer",
-            "watches every move — cuts in the instant it turns wrong",
-            "You don't hand off and walk away. You hover, and the second the agent starts down the wrong path, you pounce.",
+            "watches every move — cuts in the instant a turn drifts",
+            "You don't hand off and walk away. You hover, and the second a turn looks like it's heading somewhere you didn't ask for, you pounce.",
             [
                 f"{fmt(m['corrections_caught'])} mid-flight course-corrections",
                 f"reverses course 1 in {round(100/rev)} prompts",

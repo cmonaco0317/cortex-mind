@@ -53,6 +53,33 @@ It is built to be **honest, not flattering**:
 Thin data gets an honest thin report; it never invents an identity from the absence
 of signal. Tested with a property-based suite (`test_report.py`): `python3 -m pytest`.
 
+## What's Next (predictive)
+
+`predict.py` is a local, deterministic next-move recommender for your workflow —
+a variable-order Markov model over your session sequences → candidates ranked by
+**lift** over your own baseline → recommendations that ship only when a Wilson
+confidence interval clears the noise → one reserved explore/exploit slot.
+
+```bash
+python3 predict.py ~/.claude/projects/<your-project-dir>       # writes whats_next.html
+python3 predict.py ~/.claude/projects/<your-project-dir> --context "Edit,Bash"  # live: predict the next move
+```
+
+Two honesty axes it holds hard (and the reason it's useful rather than a horoscope):
+
+- **Whose move is it?** In Claude Code the assistant emits every tool call — you don't
+  pick Edit vs Bash — so tool-level patterns are framed as *your agent's* execution,
+  never "your habit." "You" is reserved for what you actually type (corrections,
+  reversals) and the session-level choices you drive.
+- **Is the signal real?** Transitions are ranked by lift so your most-used tool can't
+  win by default; a "try X instead" only appears when the alternative's interval clears
+  the default's; the "smoother" proxy (a follow-up correction/error within a few moves)
+  is explicitly noisy, and treating early steering as bad is disclosed as an assumption.
+
+With no true outcome label it predicts what you *usually* do, never what's *optimal* —
+every nudge is a week-long experiment, and the last is deliberately outside your usual
+lane so it can't just entrench your ruts. Tested with `test_predict.py`.
+
 ## Privacy
 
 Everything runs on your machine. The extractor emits **aggregate statistics only** —
