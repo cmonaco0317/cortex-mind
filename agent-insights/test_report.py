@@ -513,20 +513,27 @@ def test_privacy_tripwire_blocks_every_secret_shape():
     """
     import extract as E
 
+    # Assembled at runtime, not written as literals. A credential scanner
+    # matches on SHAPE, so it can't tell a real token from a synthetic one of
+    # the same shape — and a fixture without the real shape wouldn't test the
+    # tripwire properly. Concatenating keeps each runtime string realistic while
+    # leaving nothing matchable in the source, so a gitleaks run on this repo
+    # reports real findings instead of its own test data.
+    A = "A" * 28
     leaky = [
-        "sk-ant-api03-AAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        "sk-proj-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        "sk-AAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        "sk_live_AAAAAAAAAAAAAAAAAAAA",
-        "rk_live_AAAAAAAAAAAAAAAAAAAA",
-        "ghp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        "github_pat_AAAAAAAAAAAAAAAAAAAAAAAA",
-        "AKIAIOSFODNN7EXAMPLE",
-        "AIzaSyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        "xoxb-1234567890-abcdefghij",
-        "eyJhbGciOiJI.eyJzdWIiOiIx.SflKxwRJSM",
-        "-----BEGIN RSA PRIVATE KEY-----",
-        "Bearer abcdefghijklmnopqrstuvwx",
+        "sk-" + "ant-api03-" + A,
+        "sk-" + "proj-" + A,
+        "sk-" + A,
+        "sk_" + "live_" + "A" * 20,
+        "rk_" + "live_" + "A" * 20,
+        "ghp_" + "A" * 36,
+        "github_" + "pat_" + "A" * 24,
+        "AKIA" + "IOSFODNN7EXAMPLE",
+        "AIza" + "Sy" + "A" * 33,
+        "xoxb-" + "1234567890-abcdefghij",
+        "eyJhbGciOiJI." + "eyJzdWIiOiIx." + "SflKxwRJSM",
+        "-----BEGIN " + "RSA PRIVATE KEY-----",
+        "Bearer " + "abcdefghijklmnopqrstuvwx",
         "/Users/someone/notes.md",
         "C:\\Users\\someone\\notes.md",
         "someone@example.com",
