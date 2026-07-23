@@ -499,3 +499,78 @@ def test_balanced_operator_gets_an_honest_no_tax_note():
 def test_insufficient_data_renders_an_honest_banner():
     html = R.render_html(R.build_report(EMPTY), EMPTY)
     assert "NOT ENOUGH YET" in html or "enough sessions" in html.lower()
+
+
+def test_privacy_tripwire_blocks_every_secret_shape():
+    """The tripwire is the only thing standing between a session log and a
+    shareable card, so it gets an explicit matrix rather than a spot check.
+
+    `sk-ant-api03-…` is first on purpose: the original pattern was
+    sk-[A-Za-z0-9]{20,}, which does NOT match a real Anthropic key — the run of
+    alphanumerics after "sk-" is broken by a hyphen after three characters. The
+    single most likely secret to appear in a Claude Code log was the one shape
+    the tripwire let through.
+    """
+    import extract as E
+
+    leaky = [
+        "sk-ant-api03-AAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "sk-proj-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "sk-AAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "sk_live_AAAAAAAAAAAAAAAAAAAA",
+        "rk_live_AAAAAAAAAAAAAAAAAAAA",
+        "ghp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "github_pat_AAAAAAAAAAAAAAAAAAAAAAAA",
+        "AKIAIOSFODNN7EXAMPLE",
+        "AIzaSyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "xoxb-1234567890-abcdefghij",
+        "eyJhbGciOiJI.eyJzdWIiOiIx.SflKxwRJSM",
+        "-----BEGIN RSA PRIVATE KEY-----",
+        "Bearer abcdefghijklmnopqrstuvwx",
+        "/Users/someone/notes.md",
+        "C:\\Users\\someone\\notes.md",
+        "someone@example.com",
+    ]
+    for v in leaky:
+        with pytest.raises(SystemExit):
+            E._audit({"value": v})
+        with pytest.raises(SystemExit):  # and as a KEY, not just a value
+            E._audit({v: 1})
+        with pytest.raises(SystemExit):  # and nested inside a list
+            E._audit({"runs": [{"ok": 1}, {"v": v}]})
+
+
+def test_privacy_tripwire_does_not_block_legitimate_metrics():
+    """A tripwire that fires on ordinary aggregates would just get disabled."""
+    import extract as E
+
+    E._audit(
+        {
+            "sessions": 40,
+            "tool_calls": 4000,
+            "opus_pct": 99.8,
+            "models": {"opus": 100, "haiku": 3},
+            "top_tools": {"Bash": 1500, "TaskUpdate": 50},
+            "top_files": {E.hpath("/Users/someone/x.md"): 3},
+            "reread_pct": 32.0,
+        }
+    )
+
+
+def test_paths_are_one_way_hashed():
+    import extract as E
+
+    h = E.hpath("/Users/someone/secret-project/plan.md")
+    assert "/" not in h and "someone" not in h and "secret" not in h
+    assert h == E.hpath("/Users/someone/secret-project/plan.md")  # stable
+    assert h != E.hpath("/Users/someone/secret-project/other.md")  # distinguishes
+
+
+def test_model_family_collapses_build_identifiers():
+    """Exact build strings can carry unreleased codenames; only the family ships."""
+    import extract as E
+
+    assert E.model_family("claude-opus-4-8") == "opus"
+    assert E.model_family("claude-haiku-4-5-20251001") == "haiku"
+    assert E.model_family("claude-fable-5") == "other"
+    assert E.model_family("<synthetic>") == "other"

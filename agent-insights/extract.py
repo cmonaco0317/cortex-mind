@@ -63,7 +63,21 @@ REVERSAL = (
 # Privacy tripwire: anything that looks like a path / email / secret must never
 # reach the emitted metrics. If it does, the run fails loudly instead of shipping.
 _SECRET = re.compile(
-    r"sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|pk_live_|AIza[0-9A-Za-z_-]{20,}|xox[bapr]-"
+    # NB: the character classes allow - and _ on purpose. An earlier version used
+    # sk-[A-Za-z0-9]{20,}, which does NOT match a real Anthropic key
+    # (sk-ant-api03-...) because the run of alphanumerics after "sk-" is broken by
+    # a hyphen after only three characters. The most likely secret to appear in a
+    # Claude Code session log was the one the tripwire missed.
+    r"sk-[A-Za-z0-9_-]{20,}"  # OpenAI / Anthropic (sk-ant-api03-…, sk-proj-…)
+    r"|(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{10,}"  # Stripe
+    r"|(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}"  # GitHub tokens
+    r"|github_pat_[A-Za-z0-9_]{20,}"  # GitHub fine-grained PAT
+    r"|AKIA[0-9A-Z]{16}"  # AWS access key id
+    r"|AIza[0-9A-Za-z_-]{20,}"  # Google API key
+    r"|xox[baprs]-[A-Za-z0-9-]{10,}"  # Slack
+    r"|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{6,}"  # JWT
+    r"|-----BEGIN[A-Z ]*PRIVATE KEY-----"  # PEM private key
+    r"|\bBearer\s+[A-Za-z0-9._-]{16,}"  # bearer token
 )
 
 
