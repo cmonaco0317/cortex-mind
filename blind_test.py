@@ -11,7 +11,17 @@ For each of ~20 source concepts it shows two connections:
   - BASELINE: the nearest neighbour by cosine similarity (the "obvious" match).
   - ENGINE:   a moderately-similar-but-distant concept (a non-obvious leap).
 Order is randomised and which-is-which is hidden. The rater marks which (if any)
-is a genuinely novel + useful connection. The engine passes at >=30% wins.
+is a genuinely novel + useful connection.
+
+Scoring is an exact two-sided binomial test against chance on the decisive ratings
+(the ones where a rater picked a side). It deliberately does NOT use a fixed
+percentage bar: an earlier version passed the engine at >=30% wins, which is at or
+below chance once "neither" is an option, so it could report PASS while the baseline
+was actually preferred more than twice as often.
+
+Read the result narrowly. One rater at n=20 can show that *this* rater preferred one
+side on *this* corpus. It cannot establish a general effect, and the harness says so
+in its own output rather than implying otherwise.
 
 Usage (runs 100% locally; the HTML never leaves your machine):
   blind_test.py --corpus cortex/corpus_safe.json --out cortex/blind-test.html
@@ -131,6 +141,8 @@ def render_html(corpus: list[dict], rows: list[dict], name: str) -> str:
   #verdict{{margin-top:20px;padding:18px;border-radius:10px;font-size:16px;display:none}}
   .go{{background:rgba(30,120,60,.3);border:1px solid #4ade80;color:#c6f6d5}}
   .stop{{background:rgba(140,40,40,.3);border:1px solid #f87171;color:#fecaca}}
+  .meh{{background:rgba(90,90,110,.3);border:1px solid #a1a1aa;color:#e4e4e7}}
+  #verdict small{{display:block;margin-top:8px;opacity:.85;font-size:13px;line-height:1.5}}
 </style></head><body>
 <h1>Cortex — blind insight test</h1>
 <div class="sub">For each concept, pick the connection that is a <b>genuinely novel &amp; useful</b> insight
@@ -167,19 +179,51 @@ shuffled.forEach((r,ri) => {{
   nb.onclick=()=>{{picks[ri]={{kind:'neither'}};[...opts.children].forEach(c=>c.classList.remove('sel'));nb.classList.add('sel');}};
   div.append(src,opts,nb); root.appendChild(div);
 }});
+// Exact two-sided binomial test against p=0.5. Used instead of a fixed
+// percentage bar: the old rule passed the engine at >=30% wins, which is at or
+// BELOW chance once "neither" is an option -- it could print PASS while the
+// baseline was actually preferred more than twice as often.
+function logC(n,k){{ let s=0; for(let i=1;i<=k;i++) s += Math.log(n-k+i) - Math.log(i); return s; }}
+function binomTwoSided(k,n){{
+  if(n===0) return 1;
+  const pmf = (i)=> Math.exp(logC(n,i) - n*Math.LN2);
+  const obs = pmf(k); let p=0;
+  for(let i=0;i<=n;i++){{ const pi=pmf(i); if(pi <= obs*(1+1e-9)) p += pi; }}
+  return Math.min(1,p);
+}}
 function score(){{
   const done = picks.filter(Boolean).length;
   if (done < shuffled.length) {{ alert('Rate all '+shuffled.length+' items first ('+done+' done)'); return; }}
-  const engineWins = picks.filter(p=>p.kind==='engine').length;
-  const pct = Math.round(100*engineWins/shuffled.length);
+  const engineWins   = picks.filter(p=>p.kind==='engine').length;
+  const baselineWins = picks.filter(p=>p.kind==='baseline').length;
+  const neither      = picks.filter(p=>p.kind==='neither').length;
+  const decisive     = engineWins + baselineWins;
+  const p            = binomTwoSided(engineWins, decisive);
   const v = document.getElementById('verdict');
-  const go = pct >= 30;
-  v.className = go ? 'go' : 'stop';
   v.style.display='block';
-  v.innerHTML = '<b>Engine leaps rated more novel/useful than the cosine baseline: '
-    + engineWins + '/' + shuffled.length + ' = ' + pct + '%</b><br>'
-    + (go ? '✅ PASS — the engine&apos;s leaps beat the cosine baseline at this threshold.'
-          : '🛑 FAIL — the engine&apos;s leaps did not beat the cosine baseline at this threshold.');
+
+  const tally = '<b>engine ' + engineWins + ' · baseline ' + baselineWins
+    + ' · neither ' + neither + '</b> (of ' + shuffled.length + ' rated)<br>'
+    + 'Two-sided binomial test on the ' + decisive + ' decisive ratings: p = ' + p.toFixed(3) + '.';
+  const caveat = '<small>One rater, n=' + shuffled.length + '. This measures whether '
+    + 'THIS rater preferred the engine\\u2019s leaps to the nearest-neighbour baseline on '
+    + 'THIS corpus \\u2014 not that the engine is good in general. A single-rater result is '
+    + 'suggestive at best; it is not evidence of a general effect.</small>';
+
+  if (decisive === 0) {{
+    v.className='meh';
+    v.innerHTML = tally + '<br>\\u2014 No decisive ratings: neither side was preferred anywhere. Inconclusive.' + caveat;
+  }} else if (p >= 0.05) {{
+    v.className='meh';
+    v.innerHTML = tally + '<br>\\u2014 <b>INCONCLUSIVE</b> at this sample size. The split is '
+      + 'consistent with a coin flip, so this run supports no claim in either direction.' + caveat;
+  }} else if (engineWins > baselineWins) {{
+    v.className='go';
+    v.innerHTML = tally + '<br>\\u2705 The engine\\u2019s leaps were preferred significantly more often than the baseline.' + caveat;
+  }} else {{
+    v.className='stop';
+    v.innerHTML = tally + '<br>\\uD83D\\uDED1 The <b>baseline</b> was preferred significantly more often than the engine.' + caveat;
+  }}
 }}
 </script></body></html>"""
 

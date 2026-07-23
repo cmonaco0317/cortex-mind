@@ -134,10 +134,38 @@ function topPCs(rows: number[][], num: number): number[][] {
   return comps;
 }
 
-function templateInsight(a: Concept, b: Concept): { why: string; angle: string } {
-  const bridge = a.domain !== b.domain ? `across ${a.domain} and ${b.domain}` : `within ${a.domain}`;
+/**
+ * The "why" line for a bridge.
+ *
+ * This replaces a fill-in-the-blank template that asserted every pair "rarely
+ * sit together" without ever checking, and contradicted itself on same-domain
+ * pairs ("rarely sit together, yet the link runs within ai"). Every clause here
+ * is a statement about a number that was actually measured, and the numbers
+ * ride along in `evidence` so a reader can check the claim instead of trusting
+ * it. It is still a sentence built from measurements, not generated prose --
+ * generated explanations need a model, which the offline `build_brain.py`
+ * pipeline uses and the in-browser path deliberately does not.
+ */
+function bridgeInsight(
+  a: Concept,
+  b: Concept,
+  sim: number,
+  overlap: number,
+  cross: boolean,
+): { why: string; angle: string } {
+  const relatedness =
+    sim >= 0.75 ? "Strongly related" : sim >= 0.55 ? "Clearly related" : "Loosely related";
+  const separation =
+    overlap === 0
+      ? "they share no near neighbours at all"
+      : `they share only ${Math.round(overlap * 100)}% of their near neighbours`;
+  const where = cross
+    ? `bridging ${a.domain} and ${b.domain}`
+    : `inside ${a.domain}, between two groups that otherwise don't touch`;
   return {
-    why: `“${a.label}” and “${b.label}” rarely sit together, yet the link runs ${bridge}.`,
+    why:
+      `${relatedness} (cosine ${sim.toFixed(2)}), yet ${separation} — ` +
+      `a link ${where} that neither one's own neighbourhood would surface.`,
     angle: `What would “${a.label}” look like reframed through “${b.label}”?`,
   };
 }
@@ -296,33 +324,93 @@ export function buildBrainMap(
     }
   }
 
-  const insights: BrainInsight[] = [];
+  // ---- surprise scoring -------------------------------------------------
+  //
+  // What makes a connection non-obvious? Not distance: two unrelated concepts
+  // are far apart and boring. The interesting case is a pair that is genuinely
+  // RELATED yet sits in two neighbourhoods that never touch -- two clusters
+  // meeting at a single point. So:
+  //
+  //     surprise = relatedness x (1 - neighbourhoodOverlap) x domainBonus
+  //
+  // All three terms are measured in the FULL embedding space. The previous
+  // version ranked by distance in the 3D PCA layout, which is a projection
+  // artifact: a pair lands far apart in 3D precisely when PCA discarded the
+  // axis on which they agree, so "most surprising" partly meant "worst
+  // projected". Nothing was sorted either, despite the claim of ranking.
+  const NBR = Math.min(12, Math.max(2, n - 1));
+  const nbrSet = order.map((row) => new Set(row.slice(0, NBR)));
+
+  const overlapOf = (i: number, j: number): number => {
+    const a = nbrSet[i];
+    const b = nbrSet[j];
+    let inter = 0;
+    for (const x of a) if (b.has(x)) inter++;
+    const union = a.size + b.size - inter;
+    return union ? inter / union : 0;
+  };
+
   const nBridges = Math.max(8, Math.floor(n / 4));
-  const seen = new Set<number>();
-  for (let b = 0; b < nBridges; b++) {
-    const i = Math.floor(rng() * n);
-    if (seen.has(i)) continue;
-    seen.add(i);
-    // moderately-similar-but-not-nearest, scaled so small corpora still bridge
-    const lo = Math.min(12, Math.max(2, Math.floor(n / 4)));
-    const band = order[i].slice(lo, Math.min(60, n - 1));
-    if (!band.length) continue;
-    let far = band[0];
-    let farD = -1;
-    for (const j of band) {
-      const d =
-        (coords[i][0] - coords[j][0]) ** 2 +
-        (coords[i][1] - coords[j][1]) ** 2 +
-        (coords[i][2] - coords[j][2]) ** 2;
-      if (d > farD) {
-        farD = d;
-        far = j;
-      }
+  const lo = Math.min(12, Math.max(2, Math.floor(n / 4)));
+  const hi = Math.min(60, n - 1);
+
+  type Cand = { i: number; j: number; score: number; sim: number; overlap: number; cross: boolean };
+  const cands: Cand[] = [];
+  const scored = new Set<string>();
+  for (let i = 0; i < n; i++) {
+    for (const j of order[i].slice(lo, hi)) {
+      const key = edgeKey(i, j);
+      if (scored.has(key)) continue; // each unordered pair scored once
+      scored.add(key);
+      const rel = sim[i][j];
+      if (rel <= 0) continue; // unrelated isn't surprising, it's noise
+      const ov = overlapOf(i, j);
+      const cross = concepts[i].domain !== concepts[j].domain;
+      cands.push({
+        i,
+        j,
+        sim: rel,
+        overlap: ov,
+        cross,
+        score: rel * (1 - ov) * (cross ? 1.15 : 1),
+      });
     }
-    const key = edgeKey(i, far);
-    edges.set(key, { s: Math.min(i, far), t: Math.max(i, far), w: Math.round(sim[i][far] * 1e4) / 1e4, long: true });
-    const card = templateInsight(concepts[i], concepts[far]);
-    insights.push({ s: Math.min(i, far), t: Math.max(i, far), why: card.why, angle: card.angle });
+  }
+  // Actually ranked, most-surprising-first -- the thing the README promised.
+  cands.sort((a, b) => b.score - a.score);
+
+  // Diversity guard: without it the single most "bridgeable" concept takes
+  // every slot and the card deck is one node over and over.
+  const MAX_PER_CONCEPT = 2;
+  const usedCount = new Map<number, number>();
+  const insights: BrainInsight[] = [];
+  for (const c of cands) {
+    if (insights.length >= nBridges) break;
+    if ((usedCount.get(c.i) ?? 0) >= MAX_PER_CONCEPT) continue;
+    if ((usedCount.get(c.j) ?? 0) >= MAX_PER_CONCEPT) continue;
+    usedCount.set(c.i, (usedCount.get(c.i) ?? 0) + 1);
+    usedCount.set(c.j, (usedCount.get(c.j) ?? 0) + 1);
+    const s = Math.min(c.i, c.j);
+    const t = Math.max(c.i, c.j);
+    edges.set(edgeKey(c.i, c.j), {
+      s,
+      t,
+      w: Math.round(c.sim * 1e4) / 1e4,
+      long: true,
+    });
+    const card = bridgeInsight(concepts[c.i], concepts[c.j], c.sim, c.overlap, c.cross);
+    insights.push({
+      s,
+      t,
+      why: card.why,
+      angle: card.angle,
+      score: Math.round(c.score * 1e4) / 1e4,
+      evidence: {
+        sim: Math.round(c.sim * 1e4) / 1e4,
+        overlap: Math.round(c.overlap * 1e4) / 1e4,
+        crossDomain: c.cross,
+      },
+    });
   }
 
   const neurons: BrainNeuron[] = concepts.map((c, i) => ({

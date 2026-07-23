@@ -20,6 +20,14 @@ export interface BrainInsight {
   t: number;
   why: string;
   angle: string;
+  /** Surprise score in [0,1]; insights are emitted sorted by this, descending. */
+  score?: number;
+  /** The measurements behind `why`, so a card's claim can be checked, not taken on faith. */
+  evidence?: {
+    sim: number; // cosine similarity in the full embedding space
+    overlap: number; // Jaccard overlap of the two near-neighbour sets
+    crossDomain: boolean;
+  };
 }
 
 export interface BrainMap {

@@ -3,11 +3,11 @@
 **Turn any corpus into a thinking brain — then read its mind for the non-obvious connections.**
 
 Cortex embeds your notes, docs, or an AI-agent trace into a live 3D neural map:
-each **concept becomes a neuron**, each **embedding similarity becomes a synapse**,
-and a curiosity engine *thinks* through it in real time — attending, spreading
-activation, and making dream-jumps across the graph. Every leap it makes is
-captured as an **evidence-backed Insight Card** that rolls up into an exportable
-**Insight Digest**. It runs **100% in your browser** — no backend, no upload, no CDN.
+each **concept becomes a neuron**, each **embedding similarity becomes a synapse**.
+A spreading-activation engine animates the graph in real time — attending, spreading
+activation, and making dream-jumps — while a scored, ranked set of **evidence-backed
+Insight Cards** rolls up into an exportable **Insight Digest**. It runs **100% in
+your browser** — no backend, no upload, no CDN.
 
 ![Cortex — a curiosity engine thinking in real time](docs/cortex-demo.gif)
 
@@ -19,9 +19,34 @@ captured as an **evidence-backed Insight Card** that rolls up into an exportable
 
 Most knowledge graphs are decorative — a pretty picture you look at once. Cortex is
 built around the **output**: the graph is context, the *digest of non-obvious
-connections* is the product. A curiosity engine (inspired by spreading-activation
-models of thought) wanders your concepts and surfaces pairs you wouldn't have put
-together, ranked most-surprising-first, each with a "why" and an angle to pursue.
+connections* is the product. Pairs are scored, ranked most-surprising-first, and each
+comes with a "why" backed by the numbers behind it and an angle to pursue.
+
+### What "surprising" actually means here
+
+Worth being precise, because it's the whole claim. A bridge is scored as
+
+```
+surprise = relatedness × (1 − neighbourhood overlap) × cross-domain bonus
+```
+
+all measured in the **full embedding space**. The interesting case isn't two things
+that are far apart — those are just unrelated. It's a pair that is genuinely
+*related* while sitting in two neighbourhoods that never touch: two clusters meeting
+at a single point. Every card shows the cosine similarity and the measured neighbour
+overlap it's asserting, so you can check the claim rather than take it.
+
+Two honest notes on that:
+
+- **The card text is composed from measurements, not generated,** in the in-browser
+  path. Genuinely written explanations require a model, which the offline
+  `build_brain.py` pipeline uses (via local Ollama) and the browser deliberately does
+  not — that's the price of never phoning home.
+- **A "concept" is usually a document.** One dropped file, or one paragraph of pasted
+  text, becomes one neuron, truncated to 600 characters and mean-pooled into a single
+  vector. For a folder of notes the graph is really document × document, and a long
+  document blurs into one averaged point. It is a coarser object than "concept ×
+  concept" suggests.
 
 ## Try it
 
@@ -55,9 +80,15 @@ and builds the brain in-browser.
 
 ## The Insight Digest — the artifact
 
-Each dream-jump emits an Insight Card: `concept A × concept B · why it's non-obvious
-· an angle to explore`, with the source snippets as evidence. Copy or download the
-whole digest as Markdown, or export any card as a watermarked share image.
+Each bridge emits an Insight Card: `concept A × concept B · why it's non-obvious · an
+angle to explore`, carrying its surprise score, the cosine similarity and neighbour
+overlap behind that score, and the source snippets. Cards come out ranked, highest
+score first. Copy or download the whole digest as Markdown, or export any card as a
+watermarked share image.
+
+*(The engine's animated dream-jumps are a live traversal of this same graph — they're
+what makes the visualisation move, not what decides which connections are worth
+showing. The ranking above does that.)*
 
 ![An exported Insight Card](docs/cortex-share-example.png)
 
@@ -67,8 +98,8 @@ whole digest as Markdown, or export any card as a watermarked share image.
 |---|---|
 | **Neurons** | your concepts, embedded with `all-MiniLM-L6-v2` (384-dim), laid out in 3D via PCA |
 | **Synapses** | k-nearest-neighbour cosine similarity between concept embeddings |
-| **Bridges** | long-range, moderately-similar pairs — the seeds of the insight leaps |
-| **Curiosity engine** | live spreading-activation with an attend → spread → dream-jump policy; the firing is emergent, not scripted |
+| **Bridges** | related-but-non-adjacent pairs, scored by `relatedness × (1 − neighbour overlap) × cross-domain bonus` and sorted |
+| **Curiosity engine** | live spreading-activation with an attend → spread → dream-jump policy; the firing is emergent, not scripted. It animates the graph — the ranking above, not the walk, selects which connections surface |
 | **Insight Digest** | the ranked, evidence-backed export — the product |
 
 ## Tech
@@ -94,13 +125,29 @@ hashed, model names are collapsed to a coarse family, no prompt text is ever sto
 and a privacy tripwire hard-fails the run if anything path- or secret-shaped would be
 written. See [`agent-insights/README.md`](agent-insights/README.md).
 
+Archetypes are decided by **rates, not totals** — corrections per 100 prompts, not
+corrections — so the label describes *how* you work rather than *how much*. (Absolute
+counts appear only as minimum-sample gates; three prompts isn't a personality.) The
+statistical mining underneath — Wilson score intervals on tool-success rates, an
+order-2 Markov next-move model, high-lift move mining — is the rigorous part; the
+archetype is the readable surface over it.
+
 ### `build_brain.py` — pre-bake a brain from a folder of notes (optional)
 
 A local CLI that embeds a folder of markdown/text with a local model (Ollama
 `nomic-embed-text`) and writes a brain JSON the web app can load — for when you'd
-rather build the graph offline than in the browser. `blind_test.py` +
-`corpus_safe.json` are a self-contained blind A/B harness for sanity-checking that
-the curiosity engine's leaps beat a plain cosine-similarity baseline.
+rather build the graph offline than in the browser. It also writes *generated*
+explanations (via local `llama3.2`), which the browser path can't do.
+
+`blind_test.py` + `corpus_safe.json` are a self-contained blind A/B harness that puts
+a scored bridge and a plain nearest-neighbour side by side, shuffled and unlabelled,
+and asks you to pick. It scores with an **exact two-sided binomial test against
+chance**, and it will tell you the run was **inconclusive** — which, at n=20 with one
+rater, is the honest answer most of the time. It deliberately has no "pass bar":
+an earlier version passed the engine at ≥30% wins, which is at or below chance once
+"neither" is an option, so it could print PASS while the baseline was actually
+preferred twice as often. Read any result narrowly: one rater on one corpus is not
+evidence of a general effect, and the harness says so in its own output.
 
 ## License
 

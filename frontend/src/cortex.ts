@@ -98,12 +98,19 @@ async function main(): Promise<void> {
     insightLookup.set(`${ins.t}-${ins.s}`, ins);
   }
   const keyOf = (ins: BrainInsight): string => (ins.s < ins.t ? `${ins.s}-${ins.t}` : `${ins.t}-${ins.s}`);
-  // Non-obviousness = low cosine similarity between the bridged pair; the long
-  // synapse carries that weight, so lower w -> more surprising -> ranked first.
+  // Ranking is decided once, where the graph is built (ingest.ts / build_brain.py):
+  //     surprise = relatedness x (1 - neighbour overlap) x cross-domain bonus
+  // and rides along on each insight as `score`. This used to re-rank here by
+  // ASCENDING cosine similarity — i.e. "least related first" — which is the
+  // opposite notion of surprise and disagreed with the builder. Two rankings
+  // meant the displayed order matched neither definition.
+  //
+  // The fallback keeps brains generated before `score` existed loading sensibly.
   const pairWeight = new Map<string, number>();
   for (const syn of map.synapses) if (syn.long) pairWeight.set(`${syn.s}-${syn.t}`, syn.w);
-  const surprise = (ins: BrainInsight): number => pairWeight.get(keyOf(ins)) ?? 1;
-  const ranked = [...allInsights].sort((x, y) => surprise(x) - surprise(y));
+  const surprise = (ins: BrainInsight): number =>
+    ins.score ?? 1 - (pairWeight.get(keyOf(ins)) ?? 1);
+  const ranked = [...allInsights].sort((x, y) => surprise(y) - surprise(x));
   el("cx-insight-total").textContent = String(allInsights.length);
 
   const discovered = new Set<string>();
@@ -172,6 +179,14 @@ async function main(): Promise<void> {
       const b = map.neurons[ins.t];
       const cross = a.domain !== b.domain ? ` · _${a.domain} ↔ ${b.domain}_` : "";
       lines.push(`## ${i + 1}. ${a.label} × ${b.label}${cross}`, ins.why, ``, `→ **${ins.angle}**`);
+      // Ship the numbers the "why" rests on, so a reader can check the claim.
+      if (ins.evidence) {
+        lines.push(
+          ``,
+          `<sub>surprise ${(ins.score ?? 0).toFixed(3)} · cosine ${ins.evidence.sim.toFixed(2)} · ` +
+            `neighbour overlap ${Math.round(ins.evidence.overlap * 100)}%</sub>`,
+        );
+      }
       if (a.snippet || b.snippet) {
         lines.push(``);
         if (a.snippet) lines.push(`> **${a.label}:** ${a.snippet}`);

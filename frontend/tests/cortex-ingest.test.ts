@@ -140,3 +140,69 @@ describe("buildBrainMap", () => {
     expect(spread).toBe(true);
   });
 });
+
+// The README claims insights are "ranked most-surprising-first" and that each
+// card explains itself. Both were false: there was no score and no sort, and the
+// text was a fill-in-the-blank template that asserted "rarely sit together"
+// without measuring anything. These pin the claims to the behaviour.
+describe("insight ranking + evidence", () => {
+  const build = (n = 20, dim = 24) => {
+    const concepts = Array.from({ length: n }, (_, i) => ({
+      id: `c${i}`,
+      label: `Concept ${i}`,
+      domain: i % 3 === 0 ? "alpha" : i % 3 === 1 ? "beta" : "gamma",
+      text: `text ${i}`,
+    }));
+    const vecs = concepts.map((_, i) =>
+      Array.from({ length: dim }, (_, d) => Math.sin((i + 1) * (d + 1) * 0.29) + Math.cos((i + 3) * d * 0.11)),
+    );
+    return buildBrainMap(concepts, vecs, "rank-test");
+  };
+
+  it("emits insights sorted by surprise, descending", () => {
+    const insights = build().insights ?? [];
+    expect(insights.length).toBeGreaterThan(1);
+    const scores = insights.map((i) => i.score ?? -1);
+    expect(scores.every((s) => s >= 0)).toBe(true);
+    for (let i = 1; i < scores.length; i++) expect(scores[i]).toBeLessThanOrEqual(scores[i - 1]);
+  });
+
+  it("carries the measurements behind each claim", () => {
+    for (const ins of build().insights ?? []) {
+      expect(ins.evidence).toBeDefined();
+      expect(ins.evidence!.sim).toBeGreaterThan(0);
+      expect(ins.evidence!.overlap).toBeGreaterThanOrEqual(0);
+      expect(ins.evidence!.overlap).toBeLessThanOrEqual(1);
+      // score is relatedness x (1 - overlap) x cross-domain bonus
+      const expected = ins.evidence!.sim * (1 - ins.evidence!.overlap) * (ins.evidence!.crossDomain ? 1.15 : 1);
+      expect(Math.abs((ins.score ?? 0) - expected)).toBeLessThan(1e-3);
+    }
+  });
+
+  it("never contradicts itself on same-domain pairs", () => {
+    for (const ins of build().insights ?? []) {
+      // the old template emitted "rarely sit together, yet the link runs within ai"
+      expect(ins.why).not.toMatch(/rarely sit together/i);
+      if (!ins.evidence!.crossDomain) expect(ins.why).not.toMatch(/bridging/i);
+    }
+  });
+
+  it("states the measured neighbour overlap rather than asserting novelty", () => {
+    for (const ins of build().insights ?? []) {
+      const ov = ins.evidence!.overlap;
+      if (ov === 0) expect(ins.why).toMatch(/share no near neighbours/i);
+      else expect(ins.why).toMatch(new RegExp(`share only ${Math.round(ov * 100)}%`, "i"));
+      expect(ins.why).toContain(ins.evidence!.sim.toFixed(2)); // the cosine is shown
+    }
+  });
+
+  it("spreads bridges across concepts instead of fixating on one node", () => {
+    const insights = build(24).insights ?? [];
+    const uses = new Map<number, number>();
+    for (const ins of insights) {
+      uses.set(ins.s, (uses.get(ins.s) ?? 0) + 1);
+      uses.set(ins.t, (uses.get(ins.t) ?? 0) + 1);
+    }
+    for (const [, count] of uses) expect(count).toBeLessThanOrEqual(2);
+  });
+});

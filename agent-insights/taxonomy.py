@@ -342,8 +342,23 @@ def apply_diversity(cards, arch):
 
 
 def compute_archetype(m):
-    """Assign ONE named archetype from DEEP behavior — the research's core wedge
-    (an identity, not a stat). Highest-scoring trigger wins."""
+    """Assign ONE named archetype from DEEP behavior — an identity, not a stat.
+
+    Archetypes describe *style*, so every discriminating condition is a RATE.
+    They used to be absolute counts (corrections >= 40, dispatches >= 80,
+    files_edited >= 40), which made the label a proxy for how heavily you use
+    Claude Code rather than how you use it: run enough sessions and you become
+    "The Pouncer" purely by accumulating corrections, without correcting any
+    more often than anyone else.
+
+    Absolute counts survive only as MINIMUM SAMPLE SIZE gates — you can't
+    characterise someone's style from three files — never as the style signal.
+
+    The winner is the best-FITTING archetype: each candidate's score is its
+    editorial weight scaled by how far its rates clear their thresholds, so a
+    profile that barely trips two triggers doesn't beat one that strongly
+    matches a single archetype. It used to be a fixed hardcoded priority.
+    """
     tools = m.get("top_tools", {})
     top_mcp = m.get("top_mcp_servers", {})
     browser = sum(
@@ -353,16 +368,36 @@ def compute_archetype(m):
     )
     hh = m.get("hour_histogram", {})
     before_1pm = sum(int(hh.get(str(h), 0)) for h in range(6, 13))
-    bash_pct = round(100 * tools.get("Bash", 0) / (m.get("tool_calls") or 1))
+    tool_calls = m.get("tool_calls") or 1
+    assistant = m.get("assistant_turns") or 1
+    bash_pct = round(100 * tools.get("Bash", 0) / tool_calls)
     dispatches = m.get("workflow_calls", 0) + m.get("agent_calls", 0)
     r2e = m.get("read_to_edit_ratio", 9)
     rev = m.get("reversal_rate_per_100", 0)
     files_edited = m.get("distinct_files_edited", 0)
     epf = round(m.get("edit", 0) / files_edited, 1) if files_edited else 9
 
+    # --- rates: the actual style signals -----------------------------------
+    # Denominator matters. A correction is something the USER does, so it
+    # normalises by user prompts -- the same denominator reversal_rate_per_100
+    # already uses. Dividing by assistant turns instead would understate a
+    # hands-on operator whose every prompt steers several assistant turns.
+    prompts = m.get("real_user_prompts") or assistant
+    corrections = m.get("corrections_caught", 0)
+    corrections_per_100 = 100 * corrections / prompts
+    dispatch_pct = 100 * dispatches / tool_calls
+    browser_pct = 100 * browser / tool_calls
+
+    # --- sample-size floors: enough evidence to say anything at all ---------
+    ENOUGH_PROMPTS = prompts >= 50
+    ENOUGH_CALLS = tool_calls >= 300
+    ENOUGH_FILES = files_edited >= 15
+
     cands = []
 
-    def A(name, tag, defn, traits, score):
+    def A(name, tag, defn, traits, score, fit=1.0):
+        # `fit` (>=1) is how decisively the rates clear their thresholds. It
+        # breaks ties on strength of match instead of a fixed pecking order.
         cands.append(
             {
                 "kind": "archetype",
@@ -370,33 +405,36 @@ def compute_archetype(m):
                 "tagline": tag,
                 "definition": defn,
                 "traits": traits,
-                "score": score,
+                "score": round(score * min(fit, 1.6), 2),
             }
         )
 
-    if m.get("corrections_caught", 0) >= 40 and rev >= 4:
+    # Style = corrects OFTEN (per turn), not corrects A LOT (in total).
+    if ENOUGH_PROMPTS and corrections_per_100 >= 8 and rev >= 4:
         A(
             "The Pouncer",
             "watches every move — cuts in the instant a turn drifts",
             "You don't hand off and walk away. You hover, and the second a turn looks like it's heading somewhere you didn't ask for, you pounce.",
             [
-                f"{fmt(m['corrections_caught'])} mid-flight course-corrections",
+                f"{corrections_per_100:.1f} course-corrections per 100 prompts ({fmt(corrections)} total)",
                 f"reverses course 1 in {round(100/rev)} prompts",
                 f"{r2e}× read:edit — acts, never browses",
             ],
             95,
+            fit=corrections_per_100 / 8,
         )
-    if dispatches >= 80:
+    if ENOUGH_CALLS and dispatch_pct >= 2:
         A(
             "The Director",
             "doesn't do the work — runs a fleet of agents",
             "You stopped being the hands. Now you dispatch, review, and redirect a team of subagents.",
             [
-                f"{fmt(dispatches)} workflows + subagents dispatched",
+                f"{dispatch_pct:.1f}% of tool calls are dispatches ({fmt(dispatches)} total)",
                 f"{m.get('opus_pct')}% Opus — nothing but the top model",
                 f"{fmt(m.get('mcp_servers_used', 0))} MCP servers wired",
             ],
             88,
+            fit=dispatch_pct / 2,
         )
     if m.get("opus_pct", 0) >= 98 and r2e < 1 and m.get("todo_calls", 1) == 0:
         A(
@@ -411,7 +449,9 @@ def compute_archetype(m):
             84,
         )
     # The Surgeon — precision operator: genuinely single-pass, low re-read.
-    if files_edited >= 40 and epf <= 2.0 and m.get("reread_pct", 100) < 20:
+    # files_edited is a sample-size floor here, not the trait; epf and
+    # reread_pct (both rates) are what actually decide it.
+    if ENOUGH_FILES and epf <= 2.0 and m.get("reread_pct", 100) < 20:
         A(
             "The Surgeon",
             "cuts once, never circles back",
@@ -460,17 +500,18 @@ def compute_archetype(m):
             ],
             74,
         )
-    if browser >= 200:
+    if ENOUGH_CALLS and browser_pct >= 5:
         A(
             "The Puppeteer",
             "gave the agent hands",
             "Your agent doesn't just write code — it clicks, types, and drives the real web for you.",
             [
-                f"{fmt(browser)} browser-driving calls",
+                f"{browser_pct:.1f}% of tool calls drive a browser ({fmt(browser)} total)",
                 "navigates live sites",
                 "an operator, not a coder",
             ],
             72,
+            fit=browser_pct / 5,
         )
 
     cands.sort(key=lambda c: -c["score"])

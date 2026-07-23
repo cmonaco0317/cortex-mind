@@ -65,16 +65,55 @@ def _trim(s: str, limit: int) -> str:
     return (cut[:sp] if sp > limit * 0.6 else cut).rstrip(" ,;:") + "…"
 
 
-def _fallback_insight(a: dict[str, Any], b: dict[str, Any]) -> dict[str, str]:
+def _fallback_insight(
+    a: dict[str, Any],
+    b: dict[str, Any],
+    sim: float | None = None,
+    overlap: float | None = None,
+) -> dict[str, str]:
+    """Used when the local LLM is unavailable or returns nothing usable.
+
+    Every clause states a number that was actually measured. The previous version
+    asserted that each pair "rarely appear together" without checking anything,
+    and contradicted itself on same-domain pairs.
+    """
     da, db = a.get("domain", "?"), b.get("domain", "?")
-    bridge = f"across {da} and {db}" if da != db else f"within {da}"
+    cross = da != db
+    where = (
+        f"bridging {da} and {db}"
+        if cross
+        else f"inside {da}, between two groups that otherwise don't touch"
+    )
+    if sim is None or overlap is None:
+        return {
+            "why": f"A long-range link {where}.",
+            "angle": f"What would '{a['label']}' look like if reframed through '{b['label']}'?",
+        }
+    relatedness = (
+        "Strongly related"
+        if sim >= 0.75
+        else "Clearly related" if sim >= 0.55 else "Loosely related"
+    )
+    separation = (
+        "they share no near neighbours at all"
+        if overlap == 0
+        else f"they share only {round(overlap * 100)}% of their near neighbours"
+    )
     return {
-        "why": f"'{a['label']}' and '{b['label']}' rarely appear together, yet the link sits {bridge}.",
+        "why": (
+            f"{relatedness} (cosine {sim:.2f}), yet {separation} — "
+            f"a link {where} that neither one's own neighbourhood would surface."
+        ),
         "angle": f"What would '{a['label']}' look like if reframed through '{b['label']}'?",
     }
 
 
-def llm_insight(a: dict[str, Any], b: dict[str, Any]) -> dict[str, str]:
+def llm_insight(
+    a: dict[str, Any],
+    b: dict[str, Any],
+    sim: float | None = None,
+    overlap: float | None = None,
+) -> dict[str, str]:
     """Precompute (at build time, locally) why a long-range bridge is non-obvious.
 
     Runs on the local LLM so the shipped brain never needs a runtime model call —
@@ -106,10 +145,10 @@ def llm_insight(a: dict[str, Any], b: dict[str, Any]) -> dict[str, str]:
             data = json.loads(json.loads(resp.read())["response"])
         why = _trim(str(data.get("why", "")), 240)
         angle = _trim(str(data.get("angle", "")), 200)
-        fb = _fallback_insight(a, b)
+        fb = _fallback_insight(a, b, sim, overlap)
         return {"why": why or fb["why"], "angle": angle or fb["angle"]}
     except (OSError, ValueError, KeyError):
-        return _fallback_insight(a, b)
+        return _fallback_insight(a, b, sim, overlap)
 
 
 def _slug(s: str) -> str:
@@ -228,14 +267,62 @@ def build_map(
         for j in order[i, :kk]:
             add_edge(i, int(j), sim[i, int(j)], long=False)
 
-    dist = np.linalg.norm(coords[:, None, :] - coords[None, :, :], axis=2)
+    # ---- surprise scoring (mirrors frontend/src/cortex/ingest.ts) -----------
+    #
+    # A non-obvious connection is one that is genuinely RELATED yet sits in two
+    # neighbourhoods that never touch -- two clusters meeting at a single point:
+    #
+    #     surprise = relatedness x (1 - neighbourhood overlap) x domain bonus
+    #
+    # all measured in the FULL embedding space. This previously picked source
+    # concepts at RANDOM, ranked them by distance in the 3D PCA layout (a
+    # projection artifact: a pair lands far apart in 3D precisely when PCA
+    # discarded the axis on which they agree), and never sorted the result at
+    # all -- despite the docs promising "ranked most-surprising-first".
+    nbr = min(12, max(2, n - 1))
+    nbr_sets = [set(order[i, :nbr].tolist()) for i in range(n)]
     lo = min(12, max(2, n // 4))  # scale band so small corpora still bridge
-    for i in rng.choice(n, size=max(8, n // 4), replace=False):
-        cand = order[i, lo : min(60, n - 1)]
-        if len(cand) == 0:
+    hi = min(60, n - 1)
+
+    cands: list[dict[str, Any]] = []
+    seen_pairs: set[tuple[int, int]] = set()
+    for i in range(n):
+        for j in order[i, lo:hi].tolist():
+            key = (min(i, j), max(i, j))
+            if key in seen_pairs:
+                continue
+            seen_pairs.add(key)
+            rel = float(sim[i, j])
+            if rel <= 0:  # unrelated isn't surprising, it's noise
+                continue
+            inter = len(nbr_sets[i] & nbr_sets[j])
+            union = len(nbr_sets[i]) + len(nbr_sets[j]) - inter
+            ov = inter / union if union else 0.0
+            cross = corpus[i].get("domain") != corpus[j].get("domain")
+            cands.append(
+                {
+                    "i": i,
+                    "j": j,
+                    "sim": rel,
+                    "overlap": ov,
+                    "cross": cross,
+                    "score": rel * (1.0 - ov) * (1.15 if cross else 1.0),
+                }
+            )
+    cands.sort(key=lambda c: -c["score"])
+
+    # Diversity guard: without it the single most bridgeable concept takes every
+    # slot and the deck is one node over and over.
+    max_per, used, bridges = 2, {}, []
+    for c in cands:
+        if len(bridges) >= max(8, n // 4):
+            break
+        if used.get(c["i"], 0) >= max_per or used.get(c["j"], 0) >= max_per:
             continue
-        j = int(cand[int(np.argmax(dist[i, cand]))])
-        add_edge(int(i), j, sim[i, j], long=True)
+        used[c["i"]] = used.get(c["i"], 0) + 1
+        used[c["j"]] = used.get(c["j"], 0) + 1
+        add_edge(c["i"], c["j"], c["sim"], long=True)
+        bridges.append(c)
 
     neurons = [
         {
@@ -256,15 +343,29 @@ def build_map(
     # output — the toy->tool line.
     insights: list[dict[str, Any]] = []
     if gen_insights:
-        longs = [e for e in synapses if e["long"]]
-        print(f"generating {len(longs)} insight cards (local LLM)…", flush=True)
-        for idx, e in enumerate(longs):
-            card = llm_insight(corpus[e["s"]], corpus[e["t"]])
-            insights.append(
-                {"s": e["s"], "t": e["t"], "why": card["why"], "angle": card["angle"]}
+        # `bridges` is already sorted most-surprising-first, so the emitted cards
+        # are too -- and each carries the measurements its claim rests on.
+        print(f"generating {len(bridges)} insight cards (local LLM)…", flush=True)
+        for idx, c in enumerate(bridges):
+            card = llm_insight(
+                corpus[c["i"]], corpus[c["j"]], sim=c["sim"], overlap=c["overlap"]
             )
-            if (idx + 1) % 10 == 0 or idx + 1 == len(longs):
-                print(f"  insight {idx + 1}/{len(longs)}", flush=True)
+            insights.append(
+                {
+                    "s": min(c["i"], c["j"]),
+                    "t": max(c["i"], c["j"]),
+                    "why": card["why"],
+                    "angle": card["angle"],
+                    "score": round(c["score"], 4),
+                    "evidence": {
+                        "sim": round(c["sim"], 4),
+                        "overlap": round(c["overlap"], 4),
+                        "crossDomain": bool(c["cross"]),
+                    },
+                }
+            )
+            if (idx + 1) % 10 == 0 or idx + 1 == len(bridges):
+                print(f"  insight {idx + 1}/{len(bridges)}", flush=True)
 
     return {
         "meta": {

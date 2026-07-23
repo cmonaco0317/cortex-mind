@@ -88,6 +88,71 @@ def test_archetype_is_the_pouncer():
     assert R.build_report(POUNCER)["archetype"]["name"] == "The Pouncer"
 
 
+def test_archetype_measures_style_not_usage_volume():
+    """An archetype must describe HOW you work, not HOW MUCH.
+
+    The thresholds were absolute counts (corrections_caught >= 40), so anyone
+    with enough sessions became "The Pouncer" by accumulation — the label was a
+    proxy for usage volume. These two profiles invert under the fix: the heavy
+    user who rarely corrects is no longer a Pouncer, and the light user who
+    corrects constantly now is.
+    """
+    import taxonomy as T
+
+    base = dict(
+        reversal_rate_per_100=6.0,
+        reversal_count=24,
+        read_to_edit_ratio=0.8,
+        tool_calls=400,
+        top_tools={"Bash": 100},
+        edit=100,
+        distinct_files_edited=50,
+        reread_pct=32.0,
+        opus_pct=99.0,
+        workflow_calls=2,
+        agent_calls=2,
+        hour_histogram={str(h): (50 if h in (2, 3, 4, 20) else 0) for h in range(24)},
+    )
+    # 60 corrections looks like a lot, but it's 3 per 100 prompts — not hovering.
+    heavy_low_rate = dict(
+        base, assistant_turns=10000, real_user_prompts=2000, corrections_caught=60
+    )
+    # 25 corrections looks like few, but it's 25 per 100 prompts — constant hovering.
+    light_high_rate = dict(
+        base, assistant_turns=500, real_user_prompts=100, corrections_caught=25
+    )
+
+    assert heavy_low_rate["corrections_caught"] >= 40  # the OLD rule would fire
+    assert T.compute_archetype(heavy_low_rate)["name"] != "The Pouncer"
+
+    assert light_high_rate["corrections_caught"] < 40  # the OLD rule would NOT fire
+    assert T.compute_archetype(light_high_rate)["name"] == "The Pouncer"
+
+
+def test_archetype_needs_a_minimum_sample():
+    """Absolute counts survive only as sample-size floors. Three prompts is not
+    a personality, however lopsided the ratio."""
+    import taxonomy as T
+
+    tiny = dict(
+        assistant_turns=8,
+        real_user_prompts=4,
+        corrections_caught=4,  # 100 per 100 prompts, but n=4
+        reversal_rate_per_100=6.0,
+        reversal_count=1,
+        read_to_edit_ratio=0.8,
+        tool_calls=10,
+        top_tools={"Bash": 2},
+        edit=4,
+        distinct_files_edited=2,
+        reread_pct=10.0,
+        opus_pct=99.0,
+        hour_histogram={"14": 8},
+    )
+    arch = T.compute_archetype(tiny)
+    assert arch is None or arch["name"] != "The Pouncer"
+
+
 def test_archetype_dropped_on_thin_data():
     assert R.build_report(EMPTY)["archetype"] is None
 
