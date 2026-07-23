@@ -15,6 +15,69 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade pip pytest
+
+      - name: Python tests, failing if pytest collects nothing
+        # A suite that collects nothing must never read as a pass: pytest exits
+        # 5 on an empty collection, and a root collection error once silently
+        # took all 78 tests with it.
+        run: |
+          collected=$(python -m pytest --collect-only -q | grep -c '::' || true)
+          echo "collected python tests: $collected"
+          if [ "$collected" -eq 0 ]; then
+            echo "::error::pytest collected ZERO tests"
+            exit 1
+          fi
+          python3 -m pytest -q
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+        working-directory: frontend
+
+      - name: Frontend tests, failing if vitest collects nothing
+        working-directory: frontend
+        run: |
+          npm test -- --reporter=json --outputFile="$RUNNER_TEMP/vitest.json"
+          node -e '
+            const r = require(process.env.RUNNER_TEMP + "/vitest.json");
+            console.log("collected vitest tests: " + r.numTotalTests);
+            if (!r.numTotalTests) {
+              console.log("::error::vitest collected ZERO tests");
+              process.exit(1);
+            }
+          '
+
+      - name: Build, then assert SECURITY.md's tree-shaking greps against dist/
+        # SECURITY.md presents these four greps as the proof that protobufjs
+        # never reaches a visitor. Unasserted, that proof has a shelf life of one
+        # dependency bump.
+        working-directory: frontend
+        run: |
+          npm run build
+          fail=0
+          for pat in 'protobufjs' 'onnx-proto' 'google/protobuf' '$protobuf'; do
+            if grep -rIlF -- "$pat" dist/ >/dev/null 2>&1; then
+              echo "::error::SECURITY.md says '$pat' is tree-shaken out of the build, but it is in dist/"
+              grep -rIlF -- "$pat" dist/
+              fail=1
+            else
+              echo "clean: $pat"
+            fi
+          done
+          exit $fail
+
   build:
     runs-on: ubuntu-latest
     steps:
@@ -32,7 +95,7 @@ jobs:
           path: frontend/dist
 
   deploy:
-    needs: build
+    needs: [test, build]
     runs-on: ubuntu-latest
     environment:
       name: github-pages
