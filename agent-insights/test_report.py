@@ -223,6 +223,41 @@ def test_onegear_tax_needs_dominance_and_a_near_zero_alternative():
     )
 
 
+def test_strongest_one_gear_signal_ships_the_tax_and_its_move():
+    """The tax was INVERTED: it could not fire for the operator it most describes.
+
+    100% Opus with zero smaller-model turns is the strongest possible form of the
+    signal. That body renders the zero as a word ("none of your turns have ever
+    run on a smaller model") — no numeral — and the old personalized-or-nothing
+    gate regex-scanned rendered prose for a digit, so it silently dropped the tax.
+    Because _moves() only keeps moves whose key is in `fired`, the move went with
+    it. A weaker 99%/4-turn profile shipped both. Both directions are asserted
+    here so the inversion can't come back.
+    """
+    strongest = dict(
+        EMPTY,
+        assistant_turns=400,
+        opus_pct=100.0,
+        models={"opus": 400},
+        read_to_edit_ratio=1.0,
+    )
+    weaker = dict(strongest, opus_pct=99.0, models={"opus": 396, "haiku": 4})
+
+    assert R._smaller_models(strongest) == 0
+    assert R._smaller_models(weaker) == 4
+
+    for label, m in (("0 smaller-model turns", strongest), ("4 turns", weaker)):
+        rep = R.build_report(m)
+        assert "onegear" in {t["key"] for t in rep["taxes"]}, label
+        assert "onegear" in {mv["key"] for mv in rep["moves"]}, label
+
+    # The exact cause, pinned: this body ships even though it contains no digit.
+    body = next(t for t in R.build_report(strongest)["taxes"] if t["key"] == "onegear")[
+        "body"
+    ]
+    assert not R._has_number(body)
+
+
 # --------------------------------------------------- attribution / honesty
 def test_smaller_models_excludes_placeholder_and_codename_buckets():
     # <synthetic> and an unknown codename ('other' family) are NOT smaller models.
@@ -260,6 +295,8 @@ def test_no_parallel_or_chunking_artifact_tax():
 
 
 def test_every_body_cites_a_number():
+    # A profile whose numbers all render as numerals. NOT the shipping gate —
+    # see test_every_template_declares_and_renders_the_numbers_it_cites.
     for it in _items(R.build_report(POUNCER)):
         assert R._has_number(it["body"]), it["title"]
 
@@ -269,6 +306,118 @@ def test_bodies_cite_the_real_metric_values():
     blob = _blob(R.build_report(POUNCER))
     for token in ("60", "0.8", "1,000", "100", "300"):
         assert token in blob, token
+
+
+# Every rule in the library, and every prose BRANCH inside a rule, must be
+# exercised below. The one-gear bug lived in a branch no profile ever rendered,
+# so a per-function unit test could not see it.
+EDGE_FAMILIES = {
+    "reflex",
+    "dispatch",
+    "endurance",
+    "bash",
+    "churn",
+    "reread",
+    "planning",
+}
+TAX_KEYS = {"steer", "onegear", "churn"}
+
+# A cited zero is allowed to render as the word that stands in for it — that
+# readability choice is exactly what the old numeral scan punished.
+_ZERO_WORDS = ("none", "not one", "zero", "never", "no ")
+
+_SURGEON = dict(
+    EMPTY,
+    sessions=20,
+    assistant_turns=2000,
+    distinct_files_edited=100,
+    edit=120,
+    write=30,
+    reread_pct=10.0,
+    read_to_edit_ratio=2.0,
+    models={"opus": 1900, "haiku": 100},
+    opus_pct=95.0,
+)
+
+_ALL_OPUS = dict(
+    EMPTY,
+    sessions=10,
+    assistant_turns=400,
+    opus_pct=100.0,
+    models={"opus": 400},
+    read_to_edit_ratio=1.0,
+)
+
+_NO_REVERSALS = dict(
+    EMPTY,
+    assistant_turns=1000,
+    read_to_edit_ratio=0.8,
+    corrections_caught=40,
+    reversal_rate_per_100=0.0,
+)
+
+# name -> profile. Collectively these must fire every rule; the coverage
+# assertions below fail if a new rule is added without one.
+_RULE_COVERAGE = {
+    "pouncer": POUNCER,
+    "surgeon": _SURGEON,  # the churn EDGE (low edits-per-file)
+    "all_opus": _ALL_OPUS,  # the zero-smaller-model branch (renders as a word)
+    "no_reversals": _NO_REVERSALS,  # the steer move without its reversal clause
+}
+
+
+def _renders(v, body: str) -> bool:
+    """The cited value actually appears in the prose it was handed to."""
+    f = float(v)
+    if f == 0 and any(w in body.lower() for w in _ZERO_WORDS):
+        return True
+    forms = {str(v), str(round(f, 1))}
+    if f.is_integer():
+        forms.add(R.fmt(int(f)))
+    return any(s in body for s in forms)
+
+
+def test_every_template_declares_and_renders_the_numbers_it_cites():
+    """Personalized-or-nothing, audited across EVERY branch of the library.
+
+    Two directions, because the bug needed both: a template must declare the
+    metric values it was handed (so the gate can check inputs rather than
+    scan prose), and every declared value must actually reach the body (so
+    declaring a cite can't become a way to smuggle an unpersonalized template
+    past the gate).
+    """
+    seen_edges: set[str] = set()
+    seen_taxes: set[str] = set()
+    seen_moves: set[str] = set()
+
+    for name, m in _RULE_COVERAGE.items():
+        fired = {t["key"] for t in R._taxes(m)}
+        items = (
+            [("edge", e, seen_edges) for e in R._edges(m)]
+            + [("tax", t, seen_taxes) for t in R._taxes(m)]
+            + [("move", mv, seen_moves) for mv in R._moves(m) if mv["key"] in fired]
+        )
+        assert items, name
+        for kind, it, bucket in items:
+            where = f"{name}/{kind}/{it['title']}"
+            assert R._personalized(it), where
+            for v in it["cites"]:
+                assert _renders(v, it["body"]), f"{where}: {v!r} missing from body"
+            bucket.add(it.get("key") or it["family"])
+
+    assert seen_edges == EDGE_FAMILIES
+    assert seen_taxes == TAX_KEYS
+    assert seen_moves == TAX_KEYS
+
+
+def test_an_undeclared_template_cannot_ship():
+    # The gate is structural, so it must reject a body that cites nothing —
+    # including one stuffed with digits that came from somewhere else.
+    assert not R._personalized({"body": "42 of 99 turns", "cites": ()})
+    assert not R._personalized({"body": "42 of 99 turns"})
+    assert not R._personalized({"body": "x", "cites": (None,)})
+    assert not R._personalized({"body": "x", "cites": (3, float("nan"))})
+    assert R._personalized({"body": "x", "cites": (0,)})  # zero is a real value
 
 
 def test_no_broken_or_placeholder_numbers():

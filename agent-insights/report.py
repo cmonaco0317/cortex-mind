@@ -10,7 +10,12 @@ Design (locked in OPERATOR-REPORT.md — do not drift):
   - **Leverage, not advice.** EDGE = strengths to lean into; TAX = a tradeoff
     you're choosing, never a scold; MOVE = a one-week self-experiment.
   - **Personalized or nothing.** Every shipped body cites a number computed from
-    *your* metrics. A template that can't cite a number does not ship.
+    *your* metrics. A template that can't cite a number does not ship. This is
+    enforced STRUCTURALLY (see _personalized): every template declares the metric
+    values it was handed, and ships only if those values are real numbers. It is
+    NOT a regex scan of the rendered prose — a scan drops a body whose number
+    reads best as a word ("none of your turns"), which silently killed the
+    one-gear tax for the exact operators it describes most strongly.
   - **Taxes fire on signal PAIRS, not lone stats** — an earned tradeoff, not a nag.
   - **Inference-honest.** The data knows what you *did*, never whether it *worked*.
     Every judgment is attributed to YOUR action ("a turn you flagged"), never to
@@ -34,6 +39,7 @@ Usage:
 
 import argparse
 import json
+import math
 import re
 import sys
 from typing import Any
@@ -138,7 +144,37 @@ def _planning_calls(m: dict) -> int:
 
 
 def _has_number(s: str) -> bool:
+    """True if the rendered prose contains an ASCII digit.
+
+    NOT the shipping gate — see _personalized. Kept as a test-facing assertion
+    for profiles whose numbers all render as numerals.
+    """
     return any(ch.isdigit() for ch in s)
+
+
+def _personalized(item: dict) -> bool:
+    """Personalized-or-nothing, checked on the INPUTS instead of the output.
+
+    Every template declares `cites`: the metric values it was handed. An item
+    ships when it cites at least one value and every cited value is a real,
+    finite number computed from this operator's data.
+
+    The previous gate regex-scanned the rendered body for a digit. That made
+    readability and shipping the same decision: the one-gear tax renders zero as
+    "none of your turns have ever run on a smaller model" — the strongest form of
+    the signal, and the only form with no numeral — so the tax (and, through
+    `fired`, its move) was dropped for exactly the operators it described, while
+    a weaker profile with 4 smaller-model turns shipped it.
+    """
+    cites = item.get("cites")
+    if not cites:
+        return False
+    return all(
+        isinstance(v, (int, float))
+        and not isinstance(v, bool)
+        and math.isfinite(float(v))
+        for v in cites
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -147,9 +183,15 @@ def _has_number(s: str) -> bool:
 def _edges(m: dict) -> list[dict]:
     out: list[dict] = []
 
-    def edge(family: str, priority: int, title: str, body: str) -> None:
+    def edge(family: str, priority: int, title: str, body: str, cites: tuple) -> None:
         out.append(
-            {"family": family, "priority": priority, "title": title, "body": body}
+            {
+                "family": family,
+                "priority": priority,
+                "title": title,
+                "body": body,
+                "cites": cites,
+            }
         )
 
     pounce = m.get("pounce_median_sec")
@@ -173,6 +215,7 @@ def _edges(m: dict) -> list[dict]:
             f"{pounce} seconds from the agent's last action to your next message. You "
             f"don't sit and watch a turn head somewhere you didn't want; you jump in "
             f"and redirect. Lean in — a fast interrupt is leverage on a loose leash.",
+            cites=(corrections, pounce),
         )
 
     if dispatches >= 40:
@@ -184,6 +227,7 @@ def _edges(m: dict) -> list[dict]:
             f"({wf} workflows and {ag} subagents). You've crossed from chatting with an "
             f"agent to running a fleet — you hand off whole tasks and redirect them, "
             f"rather than driving every step by hand.",
+            cites=(dispatches, wf, ag),
         )
 
     if max_turns >= 300:
@@ -194,6 +238,7 @@ def _edges(m: dict) -> list[dict]:
             f"Your longest single project transcript reached {fmt(max_turns)} turns in "
             f"one continuous thread. You keep the build in a single running context "
             f"rather than restarting into fresh chats to clear your head.",
+            cites=(max_turns,),
         )
 
     if tool_calls and bash / tool_calls >= 0.30:
@@ -205,6 +250,7 @@ def _edges(m: dict) -> list[dict]:
             f"{fmt(bash)} shell commands — {pct}% of every tool call routed through "
             f"Bash. When you want something done you drop to the terminal, not a wrapper "
             f"around it.",
+            cites=(bash, pct),
         )
 
     if files >= 40 and 0 < epf <= 2.0 and reread < 20:
@@ -214,6 +260,7 @@ def _edges(m: dict) -> list[dict]:
             "You touch a file and move on.",
             f"{epf} edits per file across {fmt(files)} files, with {reread}% re-reads — "
             f"low-rework passes with little doubling back.",
+            cites=(epf, files, reread),
         )
 
     if reread >= 25:
@@ -223,6 +270,7 @@ def _edges(m: dict) -> list[dict]:
             "You look again before you commit.",
             f"{reread}% of your reads re-open a file already seen that session — you send "
             f"the agent back to the source instead of acting on a stale read.",
+            cites=(reread,),
         )
 
     planning = _planning_calls(m)
@@ -234,6 +282,7 @@ def _edges(m: dict) -> list[dict]:
             f"{fmt(planning)} times you wrote or updated a task list — you lay the plan "
             f"out on paper and track it as you go, rather than holding the whole build in "
             f"your head.",
+            cites=(planning,),
         )
 
     return out
@@ -245,7 +294,9 @@ def _edges(m: dict) -> list[dict]:
 def _taxes(m: dict) -> list[dict]:
     out: list[dict] = []
 
-    def tax(key: str, family: str, priority: int, title: str, body: str) -> None:
+    def tax(
+        key: str, family: str, priority: int, title: str, body: str, cites: tuple
+    ) -> None:
         out.append(
             {
                 "key": key,
@@ -253,6 +304,7 @@ def _taxes(m: dict) -> list[dict]:
                 "priority": priority,
                 "title": title,
                 "body": body,
+                "cites": cites,
             }
         )
 
@@ -278,6 +330,7 @@ def _taxes(m: dict) -> list[dict]:
             f"tell you how many of those {fmt(corrections)} cut-ins one line of intent up "
             f"front would have prevented — that's a tradeoff worth making on purpose, not "
             f"by default.",
+            cites=(r2e, corrections),
         )
 
     # One-gear tax — the pair: a dominant model AND a near-zero smaller-model sample.
@@ -297,6 +350,7 @@ def _taxes(m: dict) -> list[dict]:
             f"side-by-side that would show where a lighter one is indistinguishable. "
             f"Whether that's costing you anything is exactly what you can't know until "
             f"you look.",
+            cites=(smaller,),
         )
 
     # One-file gravity tax — the pair: one file far above your own per-file average.
@@ -309,6 +363,7 @@ def _taxes(m: dict) -> list[dict]:
             f"One file pulled {fmt(churn)} edits while your average across {fmt(files)} "
             f"files is {epf}. You'll stay on one thing until it's right rather than move "
             f"on — a real preference, and the cost of it lives in that one file.",
+            cites=(churn, files, epf),
         )
 
     return out
@@ -345,6 +400,7 @@ def _moves(m: dict) -> list[dict]:
                 f"cut-ins, moved earlier. If nothing shifts, you've spent one sentence "
                 f"and you keep the reflex."
             ),
+            "cites": (corrections,) + ((one_in,) if one_in >= 2 else ()),
         },
         {
             "key": "onegear",
@@ -355,6 +411,7 @@ def _moves(m: dict) -> list[dict]:
                 f"you don't have; {smaller_cite} ever run on a lighter model. Keep it "
                 f"where the output is indistinguishable; revert it where it isn't."
             ),
+            "cites": (smaller,),
         },
         {
             "key": "churn",
@@ -364,6 +421,7 @@ def _moves(m: dict) -> list[dict]:
                 f"for a week. If it isn't right by pass three, write down why and move on "
                 f"— then see whether that ceiling ever actually cost you anything."
             ),
+            "cites": (churn,),
         },
     ]
 
@@ -417,12 +475,13 @@ def build_report(m: dict) -> dict[str, Any]:
 
     edges, taxes = _diversify(_edges(m), _taxes(m))
 
-    # Personalized-or-nothing: a body that can't cite a number never ships.
-    edges = [e for e in edges if _has_number(e["body"])]
-    taxes = [t for t in taxes if _has_number(t["body"])]
+    # Personalized-or-nothing, on the metric values each template was handed —
+    # never on its rendered prose (see _personalized).
+    edges = [e for e in edges if _personalized(e)]
+    taxes = [t for t in taxes if _personalized(t)]
 
     fired = {t["key"] for t in taxes}
-    moves = [mv for mv in _moves(m) if mv["key"] in fired and _has_number(mv["body"])]
+    moves = [mv for mv in _moves(m) if mv["key"] in fired and _personalized(mv)]
 
     report: dict[str, Any] = {
         "kind": "operator_report",
@@ -440,7 +499,10 @@ def build_report(m: dict) -> dict[str, Any]:
             }
             for t in taxes
         ],
-        "moves": moves,
+        # `cites` is a build-time gate input, not part of the shipped artifact.
+        "moves": [
+            {"key": mv["key"], "title": mv["title"], "body": mv["body"]} for mv in moves
+        ],
         "footer": FOOTER,
         "meta": {"sessions": int(m.get("sessions", 0))},
     }
