@@ -2,9 +2,11 @@
 
 ## Dependency advisories: what reaches a visitor
 
-`npm audit` currently reports 11 advisories on this project, including three
-criticals. **None of them reach someone who loads the page.** That's a specific,
-checkable claim rather than a reassurance, so here is the check.
+`npm audit` currently reports **0 advisories**. That number is the least interesting
+part of this section, and it is deliberately not the argument — for a while the count
+was 11, including three criticals, and **none of those reached someone who loaded the
+page either**. What matters is which code actually ships, so here is that check, kept
+because it is what the claim rests on.
 
 ### The chain that looks alarming
 
@@ -12,11 +14,13 @@ checkable claim rather than a reassurance, so here is the check.
 @xenova/transformers → onnxruntime-web → onnx-proto → protobufjs
 ```
 
-`protobufjs@6.11.6` carries a critical advisory (arbitrary code execution) plus
+`protobufjs@6.11.6` carried a critical advisory (arbitrary code execution) plus
 several highs. It is a transitive dependency of the embedding runtime, so the
-obvious conclusion is that a shipped, user-facing library has a critical CVE.
+obvious conclusion was that a shipped, user-facing library had a critical CVE.
 
-That conclusion is wrong, and it's worth showing why rather than asserting it.
+That conclusion was wrong, and it's worth showing why rather than asserting it —
+especially now that the advisory is gone, since a green `npm audit` is not evidence
+of anything on its own.
 
 ### Why it doesn't ship
 
@@ -43,17 +47,32 @@ minifier-generated variable name, `const sharp={}`, not the library.)
 
 Not visitors — **the build machine**. `vite`, `vitest`, `esbuild`, `sharp` and the
 rest execute during `npm ci` and `npm run build`, on a developer's laptop or in CI.
-That's a real if narrower exposure, and it's the reason the non-breaking upgrades
-were applied (14 advisories → 11) rather than shrugged off.
+That's a real if narrower exposure, and this repo auto-deploys from CI on every push
+to `main`, so it is the exposure worth actually closing.
 
-### Why the remaining 11 are still there
+### How they were closed, and the trap that was avoided
 
-`npm audit fix --force` resolves them by downgrading `@xenova/transformers` from
-2.17.2 to **1.4.2** — a major-version downgrade that breaks the local-model loading
-this project depends on. Taking a breaking change to silence advisories on code that
-never ships would trade a real feature for a cosmetic number.
+**Do not run `npm audit fix --force` here.** It "resolves" the chain by downgrading
+`@xenova/transformers` from 2.17.2 to **1.4.2** — a major-version downgrade that
+breaks the local-model loading this project depends on. Trading a real feature for a
+cosmetic number is the wrong trade, and it stayed the wrong trade even while the
+count sat at 11.
 
-They stay, documented, until the upstream chain updates.
+What worked instead, without touching `@xenova/transformers` at all:
+
+- **The two vulnerable transitives are pinned forward** in `frontend/package.json`
+  `overrides` — `protobufjs@7.6.5`, `sharp@0.35.3`. The deprecated parent stays at
+  2.17.2. This was always available; it just isn't what `audit fix` reaches for.
+- **The build tooling took its major upgrades** — `vite` 5.4.21 → 6.4.3, `vitest` and
+  `@vitest/coverage-v8` 2.1.9 → 3.2.7. These are the packages that actually execute
+  during a build, so they are the ones where the exposure was real.
+
+Verified before it was committed, because a major bump of the bundler is exactly the
+kind of change that passes CI and breaks the artifact: `tsc` clean, 36 tests green,
+`npm ci` reproducible from the committed lock, bundle within 1 kB of the previous
+build with an identical CSS hash, and the built page loaded in a browser and rendered
+the graph (237 neurons, 1,393 synapses) with an empty console. Node engines were
+checked against the Node 20 the deploy workflow pins.
 
 ## Runtime security properties
 
