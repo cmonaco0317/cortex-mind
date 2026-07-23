@@ -164,6 +164,15 @@ an earlier version passed the engine at ≥30% wins, which is at or below chance
 preferred twice as often. Read any result narrowly: one rater on one corpus is not
 evidence of a general effect, and the harness says so in its own output.
 
+## Security
+
+`npm audit` reports advisories including criticals. **None of them reach a page
+visitor** — the alarming one (`protobufjs`, via the ONNX runtime) is tree-shaken out
+of the build entirely, because the model is parsed by the vendored WebAssembly rather
+than in JavaScript. [SECURITY.md](SECURITY.md) shows the greps that prove it, explains
+what the advisories *do* put at risk (the build machine), and says why the remaining
+ones aren'''t force-fixed.
+
 ## License
 
 Cortex's own code is [MIT](LICENSE). Vendored components keep their own licenses:
