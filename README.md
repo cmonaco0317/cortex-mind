@@ -42,11 +42,22 @@ Two honest notes on that:
   path. Genuinely written explanations require a model, which the offline
   `build_brain.py` pipeline uses (via local Ollama) and the browser deliberately does
   not — that's the price of never phoning home.
-- **A "concept" is usually a document.** One dropped file, or one paragraph of pasted
-  text, becomes one neuron, truncated to 600 characters and mean-pooled into a single
-  vector. For a folder of notes the graph is really document × document, and a long
-  document blurs into one averaged point. It is a coarser object than "concept ×
-  concept" suggests.
+- **A "concept" is a passage, not a whole document.** Files are split on their own
+  structure — headings first, then paragraph breaks — so a note covering three ideas
+  becomes three neurons instead of one blurred point sitting between all three. A
+  blank line is treated as the author saying *"new idea"*, so passages are never
+  repacked across one to hit a size target; only true fragments are glued to their
+  neighbour, and a wall of text is cut on sentence boundaries. Each passage keeps a
+  pointer back to its source document, and a single file is capped at 40 neurons so
+  one long document can't drown out the rest of the graph.
+
+  This matters for the scoring above: two passages of the *same* note are now the
+  commonest high-similarity pair in the graph and the least interesting one — the
+  author already wrote those ideas side by side, so nothing was discovered. They're
+  discounted to 0.35× rather than allowed to crowd out genuine cross-source bridges.
+
+  (Earlier versions made one neuron per file, truncated to 600 characters — which
+  discarded most of a long note and made the graph document × document.)
 
 ## Try it
 

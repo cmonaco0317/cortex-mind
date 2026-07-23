@@ -173,6 +173,94 @@ def _clean_markdown(raw: str) -> tuple[str, str]:
     return title, text
 
 
+# Passage splitting — mirrors splitPassages() in frontend/src/cortex/text.ts.
+# Both paths must build the same graph from the same folder, or the offline CLI
+# and the in-browser flow would disagree about what a "concept" even is.
+PASSAGE_TARGET = 900  # a paragraph longer than this is cut on sentence ends
+PASSAGE_MIN = 30  # below this a fragment is glued to its neighbour
+MAX_PASSAGES_PER_DOC = 40
+PASSAGE_TEXT_CAP = 1200
+
+
+def _strip_markdown(raw: str) -> str:
+    text = re.sub(r"```.*?```", " ", raw, flags=re.S)
+    text = re.sub(r"`[^`]*`", " ", text)
+    text = re.sub(r"!?\[([^\]]*)\]\([^)]*\)", r"\1", text)
+    text = re.sub(r"^\s{0,3}#{1,6}\s+", " ", text, flags=re.M)
+    text = re.sub(r"[#>*_~|]", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _chunk_sentences(text: str, size: int) -> list[str]:
+    sentences = re.findall(r"[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$", text) or [text]
+    out: list[str] = []
+    buf = ""
+    for s in sentences:
+        if buf and len(buf) + len(s) > size:
+            out.append(buf.strip())
+            buf = ""
+        buf += s
+    if buf.strip():
+        out.append(buf.strip())
+    return [x for x in out if x]
+
+
+def _split_passages(raw: str, doc_title: str = "") -> list[tuple[str, str]]:
+    """Break a document into (heading, text) passages, each about ONE thing.
+
+    A blank line is the author saying "new idea", so passages are NOT greedily
+    packed to PASSAGE_TARGET across paragraph breaks — only true fragments are
+    merged.
+    """
+    sections: list[tuple[str, list[str]]] = []
+    heading, body = doc_title, []
+    for ln in raw.splitlines():
+        m = re.match(r"^\s{0,3}#{1,6}\s+(.*)", ln)
+        if m:
+            if " ".join(body).strip():
+                sections.append((heading, body))
+            heading, body = m.group(1).strip(), []
+        else:
+            body.append(ln)
+    if " ".join(body).strip() or not sections:
+        sections.append((heading, body))
+
+    out: list[list[str]] = []  # [heading, text] so trailing fragments can merge
+    for head, lines in sections:
+        paras = [
+            p
+            for p in (
+                _strip_markdown(x) for x in re.split(r"\n\s*\n", "\n".join(lines))
+            )
+            if p
+        ]
+        buf = ""
+
+        def flush() -> None:
+            nonlocal buf
+            t = buf.strip()
+            buf = ""
+            if not t:
+                return
+            if len(t) < PASSAGE_MIN and out and out[-1][0] == head:
+                out[-1][1] = (out[-1][1] + " " + t).strip()
+                return
+            out.append([head, t])
+
+        for p in paras:
+            if len(p) > PASSAGE_TARGET:
+                flush()
+                out.extend(
+                    [head, piece] for piece in _chunk_sentences(p, PASSAGE_TARGET)
+                )
+                continue
+            buf = f"{buf} {p}" if buf else p
+            if len(buf) >= PASSAGE_MIN:
+                flush()
+        flush()
+    return [(h, t) for h, t in out if len(t) >= PASSAGE_MIN]
+
+
 def ingest_folder(root: str, max_concepts: int) -> list[dict[str, Any]]:
     """Turn a folder of notes/docs into a concept corpus (one file per concept)."""
     base = Path(root).expanduser().resolve()
@@ -195,14 +283,27 @@ def ingest_folder(root: str, max_concepts: int) -> list[dict[str, Any]]:
         rel = p.relative_to(base)
         domain = rel.parts[0] if len(rel.parts) > 1 else "note"
         label = title or p.stem.replace("-", " ").replace("_", " ").title()
-        concepts.append(
-            {
-                "id": _slug(str(rel.with_suffix(""))),
-                "label": label[:60],
-                "domain": _slug(domain)[:24] or "note",
-                "text": (label + ". " + text)[:600],
-            }
-        )
+        # One file used to become one concept, truncated to 600 chars. A long
+        # note therefore lost most of its content and mean-pooled its remaining
+        # ideas into a single blurred vector. Mirrors splitPassages() in
+        # frontend/src/cortex/text.ts so both paths build the same graph.
+        passages = _split_passages(raw, title)[:MAX_PASSAGES_PER_DOC]
+        for i, (heading, body) in enumerate(passages):
+            sub = heading if (heading and heading != title) else None
+            concepts.append(
+                {
+                    "id": _slug(
+                        str(rel.with_suffix(""))
+                        + (f"-{i}" if len(passages) > 1 else "")
+                    ),
+                    "label": (sub or label)[:60],
+                    "domain": _slug(domain)[:24] or "note",
+                    "text": ((sub + ". " if sub else label + ". ") + body)[
+                        :PASSAGE_TEXT_CAP
+                    ],
+                    "source": label[:60],
+                }
+            )
     if len(concepts) > max_concepts:
         print(
             f"note: {len(concepts)} files found; capping to first {max_concepts}",
@@ -299,6 +400,12 @@ def build_map(
             union = len(nbr_sets[i]) + len(nbr_sets[j]) - inter
             ov = inter / union if union else 0.0
             cross = corpus[i].get("domain") != corpus[j].get("domain")
+            # Two passages of the SAME note are the commonest high-similarity
+            # pair once documents are split, and the least interesting: the
+            # author already put those ideas side by side, so nothing was
+            # discovered. Discounted so they can't crowd out real bridges.
+            src_i, src_j = corpus[i].get("source"), corpus[j].get("source")
+            same_doc = src_i is not None and src_i == src_j
             cands.append(
                 {
                     "i": i,
@@ -306,7 +413,11 @@ def build_map(
                     "sim": rel,
                     "overlap": ov,
                     "cross": cross,
-                    "score": rel * (1.0 - ov) * (1.15 if cross else 1.0),
+                    "same_doc": same_doc,
+                    "score": rel
+                    * (1.0 - ov)
+                    * (1.15 if cross else 1.0)
+                    * (0.35 if same_doc else 1.0),
                 }
             )
     cands.sort(key=lambda c: -c["score"])
@@ -361,6 +472,7 @@ def build_map(
                         "sim": round(c["sim"], 4),
                         "overlap": round(c["overlap"], 4),
                         "crossDomain": bool(c["cross"]),
+                        "sameDocument": bool(c["same_doc"]),
                     },
                 }
             )

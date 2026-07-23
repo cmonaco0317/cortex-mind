@@ -6,6 +6,7 @@ export interface BrainNeuron {
   y: number;
   z: number;
   snippet?: string; // short source text, so each insight is traceable (evidence)
+  source?: string; // parent document, when this neuron is one passage of a longer file
 }
 
 export interface BrainSynapse {
@@ -27,6 +28,9 @@ export interface BrainInsight {
     sim: number; // cosine similarity in the full embedding space
     overlap: number; // Jaccard overlap of the two near-neighbour sets
     crossDomain: boolean;
+    /** Both passages came from the same source document — related by authorship,
+     *  not by discovery, so heavily discounted in the surprise score. */
+    sameDocument?: boolean;
   };
 }
 

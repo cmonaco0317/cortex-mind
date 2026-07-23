@@ -10,7 +10,7 @@
 
 import { pipeline, env } from "@xenova/transformers";
 import type { BrainMap, BrainNeuron, BrainSynapse, BrainInsight } from "./types";
-import { slug, firstWords, redactConcept, type Concept, type ParseNote } from "./text";
+import { slug, firstWords, redactConcept, splitPassages, type Concept, type ParseNote } from "./text";
 import { parseJsonlTrace, parseJsonArrayRecords } from "./adapters/agent-trace";
 
 // Re-exported so callers can keep importing these from "./ingest".
@@ -152,6 +152,7 @@ function bridgeInsight(
   sim: number,
   overlap: number,
   cross: boolean,
+  sameDoc = false,
 ): { why: string; angle: string } {
   const relatedness =
     sim >= 0.75 ? "Strongly related" : sim >= 0.55 ? "Clearly related" : "Loosely related";
@@ -159,13 +160,15 @@ function bridgeInsight(
     overlap === 0
       ? "they share no near neighbours at all"
       : `they share only ${Math.round(overlap * 100)}% of their near neighbours`;
-  const where = cross
-    ? `bridging ${a.domain} and ${b.domain}`
-    : `inside ${a.domain}, between two groups that otherwise don't touch`;
+  const where = sameDoc
+    ? `both from “${a.source}” — the same note, so you already wrote them side by side`
+    : cross
+      ? `bridging ${a.domain} and ${b.domain}`
+      : `inside ${a.domain}, between two groups that otherwise don't touch`;
   return {
     why:
       `${relatedness} (cosine ${sim.toFixed(2)}), yet ${separation} — ` +
-      `a link ${where} that neither one's own neighbourhood would surface.`,
+      `a link ${where}${sameDoc ? "." : " that neither one's own neighbourhood would surface."}`,
     angle: `What would “${a.label}” look like reframed through “${b.label}”?`,
   };
 }
@@ -198,6 +201,13 @@ function cleanMarkdown(raw: string): { title: string; text: string } {
 }
 
 const MIN_MD_TEXT = 30;
+/** Ceiling on neurons from a single file, so one 400-page document can't drown
+ *  out every other source in the graph. */
+const MAX_PASSAGES_PER_DOC = 40;
+/** Per-passage text cap. Larger than the old whole-document 600 because a
+ *  passage is now one idea rather than a whole file, and mean-pooling a single
+ *  idea over ~1000 chars still yields a sharp vector. */
+const PASSAGE_TEXT_CAP = 1200;
 
 /** The result of turning raw inputs into concepts, plus plain-English diagnostics. */
 export interface IngestResult {
@@ -230,11 +240,28 @@ export function ingestFiles(files: Array<{ name: string; text: string }>): Inges
       }
       const parts = f.name.split(/[/\\]/);
       const domain = parts.length > 1 ? slug(parts[parts.length - 2]).slice(0, 20) : "note";
-      collected.push({
-        id: slug(f.name.replace(/\.[^.]+$/, "")),
-        label: (title || parts[parts.length - 1].replace(/\.[^.]+$/, "")).slice(0, 60),
-        domain: domain || "note",
-        text: `${title}. ${text}`.slice(0, 600),
+      const base = f.name.replace(/\.[^.]+$/, "");
+      const docLabel = (title || parts[parts.length - 1].replace(/\.[^.]+$/, "")).slice(0, 60);
+      // One file used to become one neuron. Now it becomes one neuron per
+      // passage, so a note covering three ideas stops collapsing into a single
+      // blurred point sitting between all three.
+      const passages = splitPassages(f.text, title).slice(0, MAX_PASSAGES_PER_DOC);
+      if (passages.length > 1) {
+        notes.push({ file: f.name, level: "info", message: `${f.name}: split into ${passages.length} passages.` });
+      }
+      passages.forEach((p, i) => {
+        const label = p.heading && p.heading !== title
+          ? p.heading
+          : passages.length > 1
+            ? `${docLabel} — ${firstWords(p.text, 5)}`
+            : docLabel;
+        collected.push({
+          id: slug(passages.length > 1 ? `${base}-${i}` : base),
+          label: label.slice(0, 60),
+          domain: domain || "note",
+          text: (p.heading ? `${p.heading}. ${p.text}` : p.text).slice(0, PASSAGE_TEXT_CAP),
+          source: docLabel,
+        });
       });
     }
   }
@@ -248,17 +275,14 @@ export function ingestFiles(files: Array<{ name: string; text: string }>): Inges
 
 /** Split pasted freeform text into concept-sized chunks (by headings / blank lines). */
 export function ingestText(raw: string): IngestResult {
-  const blocks = raw.split(/\n\s*\n|(?=^#{1,6}\s)/m).map((b) => b.trim()).filter((b) => b.length >= MIN_MD_TEXT);
-  const concepts = blocks
-    .map((b, i) => {
-      const { title, text } = cleanMarkdown(b);
-      return {
-        id: `paste-${i}`,
-        label: (title || firstWords(text, 6)).slice(0, 60),
-        domain: "note",
-        text: text.slice(0, 600),
-      };
-    })
+  const concepts = splitPassages(raw)
+    .slice(0, MAX_PASSAGES_PER_DOC)
+    .map((p, i) => ({
+      id: `paste-${i}`,
+      label: (p.heading || firstWords(p.text, 6)).slice(0, 60),
+      domain: "note",
+      text: (p.heading ? `${p.heading}. ${p.text}` : p.text).slice(0, PASSAGE_TEXT_CAP),
+    }))
     .map(redactConcept);
   const notes: ParseNote[] = concepts.length
     ? [{ file: "(pasted text)", level: "info", message: `${concepts.length} concept${concepts.length === 1 ? "" : "s"} from pasted text.` }]
@@ -354,7 +378,7 @@ export function buildBrainMap(
   const lo = Math.min(12, Math.max(2, Math.floor(n / 4)));
   const hi = Math.min(60, n - 1);
 
-  type Cand = { i: number; j: number; score: number; sim: number; overlap: number; cross: boolean };
+  type Cand = { i: number; j: number; score: number; sim: number; overlap: number; cross: boolean; sameDoc: boolean };
   const cands: Cand[] = [];
   const scored = new Set<string>();
   for (let i = 0; i < n; i++) {
@@ -366,13 +390,21 @@ export function buildBrainMap(
       if (rel <= 0) continue; // unrelated isn't surprising, it's noise
       const ov = overlapOf(i, j);
       const cross = concepts[i].domain !== concepts[j].domain;
+      // Now that one document yields many passages, two chunks of the SAME note
+      // are the commonest high-similarity pair in the graph — and the least
+      // interesting: the author already put those ideas side by side. Nothing
+      // was discovered, so they're heavily discounted rather than allowed to
+      // crowd out genuine cross-source bridges.
+      const sameDoc =
+        concepts[i].source !== undefined && concepts[i].source === concepts[j].source;
       cands.push({
         i,
         j,
         sim: rel,
         overlap: ov,
         cross,
-        score: rel * (1 - ov) * (cross ? 1.15 : 1),
+        sameDoc,
+        score: rel * (1 - ov) * (cross ? 1.15 : 1) * (sameDoc ? 0.35 : 1),
       });
     }
   }
@@ -398,7 +430,7 @@ export function buildBrainMap(
       w: Math.round(c.sim * 1e4) / 1e4,
       long: true,
     });
-    const card = bridgeInsight(concepts[c.i], concepts[c.j], c.sim, c.overlap, c.cross);
+    const card = bridgeInsight(concepts[c.i], concepts[c.j], c.sim, c.overlap, c.cross, c.sameDoc);
     insights.push({
       s,
       t,
@@ -409,6 +441,7 @@ export function buildBrainMap(
         sim: Math.round(c.sim * 1e4) / 1e4,
         overlap: Math.round(c.overlap * 1e4) / 1e4,
         crossDomain: c.cross,
+        sameDocument: c.sameDoc,
       },
     });
   }
@@ -421,6 +454,7 @@ export function buildBrainMap(
     y: Math.round(coords[i][1] * 100) / 100,
     z: Math.round(coords[i][2] * 100) / 100,
     snippet: c.text.slice(0, 140),
+    ...(c.source ? { source: c.source } : {}),
   }));
   const synapses = [...edges.values()];
   return {
