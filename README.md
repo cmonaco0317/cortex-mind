@@ -136,6 +136,10 @@ hashed, model names are collapsed to a coarse family, no prompt text is ever sto
 and a privacy tripwire hard-fails the run if anything path- or secret-shaped would be
 written. See [`agent-insights/README.md`](agent-insights/README.md).
 
+> **Now also standalone:** [**cmonaco0317/agent-insights**](https://github.com/cmonaco0317/agent-insights)
+> — same tool, its own repo, for people who want the Claude Code report without the
+> graph app. The copy here stays as part of Cortex.
+
 Archetypes are decided by **rates, not totals** — corrections per 100 prompts, not
 corrections — so the label describes *how* you work rather than *how much*. (Absolute
 counts appear only as minimum-sample gates; three prompts isn't a personality.) The
