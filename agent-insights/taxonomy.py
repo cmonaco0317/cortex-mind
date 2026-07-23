@@ -29,6 +29,8 @@ import argparse
 import json
 import sys
 
+from extract import model_family
+
 # Families the archetype already narrates in its traits -> their standalone
 # cards are dropped from the visible set (anti-echo).
 ARCHETYPE_OWNS = {
@@ -93,8 +95,16 @@ def build_cards(m):
     night = sum(int(hh.get(str(h), 0)) for h in range(2, 5))
     cache_read = tok.get("cache_read", 0)
     output = tok.get("output", 1) or 1
-    non_opus = sum(
-        v for k, v in m.get("models", {}).items() if k != "opus" and k != "synthetic"
+    # Turns on a genuinely smaller model FAMILY. Two things this must not do:
+    # name a build ("Opus 4.8" — false for anyone who ran 4.6, and stale every
+    # release), and count the placeholder/unknown-codename buckets as "smaller"
+    # (extract collapses <synthetic> and unrecognised codenames into `other`, so
+    # the old `k != "synthetic"` test never matched the collapsed key and the
+    # card overstated how often a lighter model was actually used).
+    smaller = sum(
+        v
+        for k, v in m.get("models", {}).items()
+        if model_family(k) in ("haiku", "sonnet")
     )
     opus_pct = m.get("opus_pct", 0)
     assistant = m.get("assistant_turns", 0)
@@ -126,7 +136,7 @@ def build_cards(m):
             "taste",
             f"{opus_pct}%",
             "You never reach for a lesser model.",
-            f"Exactly {non_opus} turns out of {fmt(assistant)} ran on anything cheaper than Opus 4.8. Not one hard call handed down to a smaller model.",
+            f"{fmt(smaller)} turns out of {fmt(assistant)} ran on a smaller model. When the call is hard, you don't hand it down.",
             95,
             "model",
             "model_mix",
