@@ -211,6 +211,71 @@ def test_steer_tax_needs_both_legs_not_one():
     )
 
 
+def test_each_added_tax_needs_both_legs_not_one():
+    """Same property as the steer tax, for the three taxes added to broaden the
+    library: each single conjunct alone must NOT fire it. A tax that fires on a
+    lone stat is a nag, which is the thing the design forbids."""
+    base = dict(EMPTY, assistant_turns=3000)
+
+    # unwritten-brief: volume of delegation AND nothing written down
+    deleg = dict(base, workflow_calls=60, agent_calls=70)
+    assert "handoff" not in _tax_keys(dict(deleg, todo_calls=40))  # writes lists
+    assert "handoff" not in _tax_keys(
+        dict(base, workflow_calls=2, agent_calls=3, todo_calls=0)
+    )  # barely delegates
+    assert "handoff" in _tax_keys(dict(deleg, todo_calls=0))
+
+    # long-thread: one enormous thread AND long sessions by habit
+    assert "longhaul" not in _tax_keys(
+        dict(base, max_turns_in_session=1200, avg_session_min=20)
+    )  # one outlier marathon, short sessions otherwise
+    assert "longhaul" not in _tax_keys(
+        dict(base, max_turns_in_session=200, avg_session_min=300)
+    )  # long but not deep
+    assert "longhaul" in _tax_keys(
+        dict(base, max_turns_in_session=1200, avg_session_min=300)
+    )
+
+    # double-check: re-reads AND reading far more than editing
+    assert "verify" not in _tax_keys(
+        dict(base, reread_pct=52.0, read_to_edit_ratio=1.2)
+    )
+    assert "verify" not in _tax_keys(dict(base, reread_pct=8.0, read_to_edit_ratio=4.5))
+    assert "verify" in _tax_keys(dict(base, reread_pct=52.0, read_to_edit_ratio=4.5))
+
+
+def test_moderate_signal_reads_as_an_edge_and_its_extreme_as_a_tax():
+    """Three families carry both an edge and a tax on one behavior. The report
+    must show exactly one: praising endurance in one section and taxing it in
+    the next is the failure the diversity guard exists to prevent."""
+    base = dict(EMPTY, assistant_turns=3000)
+    cases = [
+        (
+            "endurance",
+            dict(base, max_turns_in_session=350, avg_session_min=60),
+            dict(base, max_turns_in_session=1200, avg_session_min=300),
+        ),
+        (
+            "reread",
+            dict(base, reread_pct=30.0, read_to_edit_ratio=1.5),
+            dict(base, reread_pct=52.0, read_to_edit_ratio=4.5),
+        ),
+        (
+            "dispatch",
+            dict(base, workflow_calls=60, agent_calls=70, todo_calls=40),
+            dict(base, workflow_calls=60, agent_calls=70, todo_calls=0),
+        ),
+    ]
+    for family, moderate, extreme in cases:
+        mod = R.build_report(moderate)
+        assert family in [e["family"] for e in mod["edges"]], family
+        assert family not in [t["family"] for t in mod["taxes"]], family
+
+        ext = R.build_report(extreme)
+        assert family in [t["family"] for t in ext["taxes"]], family
+        assert family not in [e["family"] for e in ext["edges"]], family
+
+
 def test_onegear_tax_needs_dominance_and_a_near_zero_alternative():
     base = dict(EMPTY, assistant_turns=1000)
     # high opus BUT a real downshift sample -> off (they have the data)
@@ -303,8 +368,11 @@ def test_every_body_cites_a_number():
 
 def test_bodies_cite_the_real_metric_values():
     # Not just "a digit exists" — the actual computed values must appear.
+    # (Was "300", distinct_files_edited, cited by the churn tax. The sample now
+    # fires four taxes and MAX_TAXES keeps three, so churn is capped out; these
+    # are the values the surviving templates actually cite.)
     blob = _blob(R.build_report(POUNCER))
-    for token in ("60", "0.8", "1,000", "100", "300"):
+    for token in ("60", "0.8", "1,000", "100", "1,500", "10.0", "32.0"):
         assert token in blob, token
 
 
@@ -320,7 +388,7 @@ EDGE_FAMILIES = {
     "reread",
     "planning",
 }
-TAX_KEYS = {"steer", "onegear", "churn"}
+TAX_KEYS = {"steer", "onegear", "churn", "handoff", "longhaul", "verify"}
 
 # A cited zero is allowed to render as the word that stands in for it — that
 # readability choice is exactly what the old numeral scan punished.
@@ -356,13 +424,41 @@ _NO_REVERSALS = dict(
     reversal_rate_per_100=0.0,
 )
 
+# Delegates heavily and writes nothing down -> the unwritten-brief tax.
+_DELEGATOR = dict(
+    EMPTY,
+    sessions=25,
+    assistant_turns=3000,
+    tool_calls=2000,
+    workflow_calls=60,
+    agent_calls=70,
+    todo_calls=0,
+    top_tools={},
+    models={"opus": 2000, "sonnet": 1000},
+    opus_pct=66.0,
+    read_to_edit_ratio=2.0,
+)
+
+# Re-reads heavily AND reads far more than it edits -> the double-check tax.
+_VERIFIER = dict(
+    EMPTY,
+    sessions=25,
+    assistant_turns=3000,
+    reread_pct=52.0,
+    read_to_edit_ratio=4.5,
+    models={"opus": 2000, "sonnet": 1000},
+    opus_pct=66.0,
+)
+
 # name -> profile. Collectively these must fire every rule; the coverage
 # assertions below fail if a new rule is added without one.
 _RULE_COVERAGE = {
-    "pouncer": POUNCER,
+    "pouncer": POUNCER,  # the long-thread tax rides this one
     "surgeon": _SURGEON,  # the churn EDGE (low edits-per-file)
     "all_opus": _ALL_OPUS,  # the zero-smaller-model branch (renders as a word)
     "no_reversals": _NO_REVERSALS,  # the steer move without its reversal clause
+    "delegator": _DELEGATOR,
+    "verifier": _VERIFIER,
 }
 
 
@@ -444,6 +540,8 @@ def test_no_outcome_quality_verdict_structural():
 
 def test_every_tax_reads_as_a_tradeoff_not_a_scold():
     # Trap 1, enforced mechanically: every tax body names the choice/tradeoff.
+    # Checked across the whole coverage matrix, not just the sample profile —
+    # prose that never renders in a test is prose that was never reviewed.
     markers = (
         "tradeoff",
         "preference",
@@ -452,8 +550,28 @@ def test_every_tax_reads_as_a_tradeoff_not_a_scold():
         "cost is",
         "cost of",
     )
-    for t in R.build_report(POUNCER)["taxes"]:
-        assert any(mk in t["body"].lower() for mk in markers), t["title"]
+    seen = set()
+    for name, m in _RULE_COVERAGE.items():
+        for t in R._taxes(m):
+            assert any(
+                mk in t["body"].lower() for mk in markers
+            ), f"{name}/{t['title']}"
+            seen.add(t["key"])
+    assert seen == TAX_KEYS
+
+
+def test_structural_honesty_holds_for_every_template():
+    """No cross-user comparison, no outcome-quality verdict, no broken number —
+    over every branch of the library rather than one profile's output."""
+    for name, m in _RULE_COVERAGE.items():
+        fired = {t["key"] for t in R._taxes(m)}
+        bodies = [it["body"] for it in R._edges(m) + R._taxes(m)]
+        bodies += [mv["body"] for mv in R._moves(m) if mv["key"] in fired]
+        assert bodies, name
+        for b in bodies:
+            assert not CROSS_USER.search(b), f"{name}: {b}"
+            assert not OUTCOME_VERDICT.search(b), f"{name}: {b}"
+            assert not BROKEN_NUM.search(b), f"{name}: {b}"
 
 
 # ------------------------------------------------------------------ moves
@@ -643,6 +761,83 @@ def test_balanced_operator_gets_an_honest_no_tax_note():
     assert rep["taxes"] == []
     html = R.render_html(rep, m)
     assert "balanced on the things it measures" in html
+    # ...and says so as a finding, not as a blank section (the design call on
+    # breadth: broaden the library, never pad it).
+    assert "the finding" in html
+    assert "Nothing weaker gets promoted" in html
+
+
+def test_a_typical_profile_earns_a_tax_and_a_clean_run_still_earns_none():
+    """The breadth decision, pinned in both directions.
+
+    With only three taxes — each gated on one specific signal pair — 28% of a
+    432-profile grid earned nothing at all, so the paid tier shipped as pure
+    compliments for more than a quarter of plausible operators. The library was
+    broadened (unwritten-brief, long-thread, double-check), NOT loosened: every
+    tax still fires on a pair, and a genuinely balanced operator must still earn
+    zero, or the taxes would just be padding.
+    """
+    import itertools
+
+    base = dict(
+        sessions=30,
+        assistant_turns=4000,
+        real_user_prompts=800,
+        tool_calls=2500,
+        read=300,
+        edit=400,
+        write=100,
+        bash=300,
+        top_tools={"Bash": 300},
+        distinct_files_edited=120,
+        pounce_median_sec=6.0,
+        reversal_rate_per_100=3.0,
+        hour_histogram={str(h): (150 if 9 <= h <= 18 else 0) for h in range(24)},
+    )
+    axes = [
+        [
+            ({"opus": 4000}, 100.0),
+            ({"opus": 3900, "haiku": 100}, 97.5),
+            ({"opus": 3000, "sonnet": 1000}, 75.0),
+        ],
+        [0.7, 1.4, 3.5],  # read:edit
+        [3, 25],  # corrections
+        [8, 60],  # sticky-file edits
+        [(350, 60), (1200, 300)],  # max turns, avg session minutes
+        [12.0, 45.0],  # re-read %
+        [(15, 0), (130, 0), (130, 40)],  # dispatches, task-list entries
+    ]
+
+    counts = []
+    for (mm, op), r2e, corr, ch, (mt, avg), rr, (disp, plan) in itertools.product(
+        *axes
+    ):
+        m = dict(
+            base,
+            models=mm,
+            opus_pct=op,
+            read_to_edit_ratio=r2e,
+            corrections_caught=corr,
+            most_churned_file_edits=ch,
+            max_turns_in_session=mt,
+            avg_session_min=avg,
+            reread_pct=rr,
+            workflow_calls=disp // 2,
+            agent_calls=disp - disp // 2,
+            todo_calls=plan,
+        )
+        rep = R.build_report(m)
+        counts.append(len(rep["taxes"]))
+        # whatever fires, the report stays internally consistent
+        assert {mv["key"] for mv in rep["moves"]} == {t["key"] for t in rep["taxes"]}
+        assert len(rep["taxes"]) <= R.MAX_TAXES
+
+    n = len(counts)
+    zero = counts.count(0)
+    assert n == 432
+    assert zero / n <= 0.15, f"{zero}/{n} profiles earn no tax at all"
+    assert sum(counts) / n >= 1.5, "a typical profile should earn 1-2 taxes"
+    assert zero > 0, "a clean run must remain possible — taxes are not quota-filled"
 
 
 def test_insufficient_data_renders_an_honest_banner():

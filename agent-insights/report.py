@@ -27,7 +27,14 @@ Design (locked in OPERATOR-REPORT.md — do not drift):
   - **One tension per signal-family**, reconciled ACROSS edges and taxes so no
     signal-family is both praised and taxed. (A single metric may inform an edge and
     a tax in DIFFERENT families — e.g. corrections as reflex-speed vs read-order — by
-    design, mirroring the hand-authored gold example.)
+    design, mirroring the hand-authored gold example.) Several families carry BOTH an
+    edge and a tax on the same behavior at different intensities — endurance, reread,
+    dispatch. The moderate form is the edge; the extreme form, paired with a second
+    signal, is the tax. _diversify picks exactly one by priority, which is why those
+    taxes sit just above their edge.
+  - **A clean run is a finding.** Taxes are not quota-filled. If none of the paired
+    signals is present, the report says so in those words rather than reaching for a
+    weaker one — see the empty note in render_html.
 
 100% local. Reads metrics.json (extract.py) → reuses compute_archetype (taxonomy.py)
 → emits report.json + a self-contained, watermarked report.html with a shareable
@@ -316,6 +323,11 @@ def _taxes(m: dict) -> list[dict]:
     churn = int(m.get("most_churned_file_edits", 0))
     files = int(m.get("distinct_files_edited", 0))
     epf = _epf(m)
+    dispatches = _dispatches(m)
+    planning = _planning_calls(m)
+    turns_max = int(m.get("max_turns_in_session", 0))
+    avg_min = float(m.get("avg_session_min", 0))
+    reread = float(m.get("reread_pct", 0))
 
     # Steer-live tax — the pair: edit-before-read AND a stream of live cut-ins.
     if r2e < 1.0 and corrections >= 20:
@@ -366,6 +378,58 @@ def _taxes(m: dict) -> list[dict]:
             cites=(churn, files, epf),
         )
 
+    # Unwritten-brief tax — the pair: heavy delegation AND nothing written down.
+    # Priority sits ABOVE the dispatch edge on purpose: delegation at this volume
+    # is the edge, delegation at this volume with no brief is the tradeoff, and
+    # _diversify must not let the report praise and tax the same family.
+    if dispatches >= 40 and planning == 0 and assistant >= 500:
+        tax(
+            "handoff",
+            "dispatch",
+            91,
+            "The unwritten-brief tax.",
+            f"{fmt(dispatches)} tasks handed to workflows and subagents across "
+            f"{fmt(assistant)} turns, and not one task-list entry written in any of "
+            f"them — the brief lives in your head, and the agent gets whatever made it "
+            f"into the prompt. That's fast to start, and the cost of it is that there's "
+            f"nothing written down to hold the result against afterwards.",
+            cites=(dispatches, assistant, planning),
+        )
+
+    # Long-thread tax — the pair: an enormous single thread AND long sessions by
+    # habit. Below these, the same behavior ships as the endurance edge.
+    if turns_max >= 800 and avg_min >= 180:
+        hrs = round(avg_min / 60, 1)
+        tax(
+            "longhaul",
+            "endurance",
+            86,
+            "The long-thread tax.",
+            f"Your longest thread ran {fmt(turns_max)} turns and your sessions average "
+            f"{hrs} hours — you stay in one context rather than pay the cost of "
+            f"restarting and re-explaining. That's a real preference. Its price is that "
+            f"the last turn of a thread and the first are working from very different "
+            f"amounts of accumulated context, and the data can't tell you where that "
+            f"line falls for you.",
+            cites=(turns_max, hrs),
+        )
+
+    # Double-check tax — the pair: re-reading heavily AND reading far more than
+    # you edit. Either alone is diligence; together they're turns spent on
+    # certainty. Below these, the same behavior ships as the reread edge.
+    if reread >= 40 and r2e >= 3.0:
+        tax(
+            "verify",
+            "reread",
+            80,
+            "The double-check tax.",
+            f"{reread}% of your reads re-open a file already seen that session, and you "
+            f"read {r2e}× for every edit — you buy certainty in turns before you move. "
+            f"That's a tradeoff, and the data can't tell you which of those re-reads "
+            f"changed the next action and which only confirmed it.",
+            cites=(reread, r2e),
+        )
+
     return out
 
 
@@ -378,6 +442,9 @@ def _moves(m: dict) -> list[dict]:
     one_in = round(100 / rev) if rev else 0
     smaller = _smaller_models(m)
     churn = int(m.get("most_churned_file_edits", 0))
+    dispatches = _dispatches(m)
+    turns_max = int(m.get("max_turns_in_session", 0))
+    reread = float(m.get("reread_pct", 0))
 
     reversal_clause = (
         f", and your 1-in-{one_in} self-reversals ease" if one_in >= 2 else ""
@@ -422,6 +489,42 @@ def _moves(m: dict) -> list[dict]:
                 f"— then see whether that ceiling ever actually cost you anything."
             ),
             "cites": (churn,),
+        },
+        {
+            "key": "handoff",
+            "title": "Write the done-when, not the how.",
+            "body": (
+                f"On your next handoffs, add one line you could hold the result against "
+                f"— a finish condition, not a plan doc, not a task list. Nothing else "
+                f"about how you dispatch changes. Hypothesis for a week: across "
+                f"{fmt(dispatches)} handoffs' worth of habit, having something written "
+                f"to check against changes how often you re-open a finished task. If it "
+                f"doesn't, you've spent one line."
+            ),
+            "cites": (dispatches,),
+        },
+        {
+            "key": "longhaul",
+            "title": "Cut one thread at a seam.",
+            "body": (
+                f"Pick one build this week and restart the thread on purpose at a "
+                f"natural seam — after the design settles, before the implementation. "
+                f"You're testing whether a thread like your {fmt(turns_max)}-turn one "
+                f"was carrying you or carrying weight. If the restart costs more than "
+                f"it saves, that's an answer too, and you stop restarting."
+            ),
+            "cites": (turns_max,),
+        },
+        {
+            "key": "verify",
+            "title": "Spend one read where you'd spend three.",
+            "body": (
+                f"For one week, on low-stakes changes only, act on the first read "
+                f"instead of sending the agent back. You're testing whether your "
+                f"{reread}% re-read rate is doing work or is a habit — keep it "
+                f"everywhere it catches something, drop it where nothing changes."
+            ),
+            "cites": (reread,),
         },
     ]
 
@@ -592,8 +695,11 @@ def render_html(report: dict, m: dict) -> str:
             report["taxes"],
             empty_note=(
                 "None of the tradeoffs this report looks for showed up this period — "
-                "your signals read balanced on the things it measures. (That's not a "
-                "clean bill of health, just the absence of the specific patterns above.)"
+                "your signals read balanced on the things it measures. That is itself "
+                "the finding, not an empty section: every tax fires on a PAIR of "
+                "signals, and none of those pairs is present in your data. Nothing "
+                "weaker gets promoted to fill the space. (It is not a clean bill of "
+                "health either — only the absence of the specific patterns above.)"
             ),
         )
         moves_html = section(

@@ -49,6 +49,18 @@ It is built to be **honest, not flattering**:
   that can't cite one doesn't ship.
 - **A mandatory "what this can't know" footer**, and no cross-user comparisons (there
   is no backend — it's self-vs-self only).
+- **Every tax fires on a PAIR of signals**, never a lone stat — an earned tradeoff
+  rather than a nag. Several behaviors carry both an edge and a tax at different
+  intensities: long sessions read as endurance, while enormous threads *and* long
+  sessions by habit read as the long-thread tax. The report shows exactly one of the
+  two, never both.
+
+**A clean run can legitimately produce no taxes, and that is a finding rather than an
+empty result.** Across a 432-profile grid, about 7% of plausible operators trip none of
+the pairs; those reports say so in those words instead of promoting a weaker signal to
+fill the section. An earlier version of the library was narrow enough that 28% earned
+nothing, which made the report read as pure compliments; the fix was three more paired
+taxes, not looser thresholds.
 
 Thin data gets an honest thin report; it never invents an identity from the absence
 of signal. Tested with a property-based suite (`test_report.py`), a card-prose suite
