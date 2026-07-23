@@ -164,6 +164,14 @@ an earlier version passed the engine at ≥30% wins, which is at or below chance
 preferred twice as often. Read any result narrowly: one rater on one corpus is not
 evidence of a general effect, and the harness says so in its own output.
 
+`build_brain.py` and `blind_test.py` are the only Python here that needs a third-party
+package — `pip install numpy`. Everything else, including the whole test suite, is
+standard library only:
+
+```bash
+python3 -m pytest        # from the repo root — 78 tests
+```
+
 ## Security
 
 `npm audit` reports advisories including criticals. **None of them reach a page
