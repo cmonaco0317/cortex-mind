@@ -51,7 +51,9 @@ It is built to be **honest, not flattering**:
   is no backend — it's self-vs-self only).
 
 Thin data gets an honest thin report; it never invents an identity from the absence
-of signal. Tested with a property-based suite (`test_report.py`): `python3 -m pytest`.
+of signal. Tested with a property-based suite (`test_report.py`), a card-prose suite
+(`test_taxonomy.py`), and an end-to-end pipeline test (`test_pipeline.py`) that runs
+all four stages as separate processes over synthetic sessions: `python3 -m pytest`.
 
 ## What's Next (predictive)
 
@@ -91,6 +93,12 @@ anything about what you were working on.
 personal output and are **git-ignored** — they are regenerable and never committed.
 `report.py` runs the same privacy tripwire before it emits anything: the run hard-fails
 if any string it's about to write looks like a real path, email, or secret.
+
+The tripwire is tested at the unit level; the guarantee is tested end to end. A pipeline
+test runs `extract → taxonomy → render → report` as four processes over synthetic session
+logs seeded with a username, real file paths, prompt text, injected system context and a
+dated model build string, then asserts that none of the five emitted artifacts contains
+any of them.
 
 ## What's solid vs. soft (honest data notes)
 
