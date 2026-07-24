@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Cortex · agent-insights — the Operator Report (Phase 1 paid tier).
+Cortex · agent-insights — the Operator Report.
 
-Sits AFTER taxonomy.py. Where the free cards are *descriptive* and shareable,
-this stage is the *paid* layer: a structured **Edge / Tax / Move** read on how
-you operate your agent fleet.
+Sits AFTER taxonomy.py. Where the cards are *descriptive* and shareable, this
+stage is a structured **Edge / Tax / Move** read on how you operate your agent
+fleet.
 
 Design (locked in OPERATOR-REPORT.md — do not drift):
   - **Leverage, not advice.** EDGE = strengths to lean into; TAX = a tradeoff
