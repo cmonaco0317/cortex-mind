@@ -109,6 +109,7 @@ def parse_sessions(project_dir: str) -> list[dict]:
     sessions: list[dict] = []
     for fn in sorted(f for f in os.listdir(project_dir) if f.endswith(".jsonl")):
         events: list[tuple[str, str | None]] = []
+        started: str | None = None
         try:
             fh = open(os.path.join(project_dir, fn), "r", errors="replace")
         except OSError:
@@ -122,6 +123,8 @@ def parse_sessions(project_dir: str) -> list[dict]:
                     o = json.loads(ln)
                 except (ValueError, TypeError):
                     continue
+                if started is None and isinstance(o.get("timestamp"), str):
+                    started = o["timestamp"]
                 m = o.get("message")
                 if not isinstance(m, dict):
                     continue
@@ -155,15 +158,22 @@ def parse_sessions(project_dir: str) -> list[dict]:
                         if txt and (k := _trigger_kind(txt)):
                             events.append((k, None))
         if events:
-            sessions.append(_session_stats(events))
+            sessions.append(_session_stats(events, started))
+    # Filenames are UUIDs, so the directory order is arbitrary. A held-out
+    # evaluation is only honest if the split is chronological: sessions with no
+    # usable timestamp sort last rather than being dropped.
+    sessions.sort(key=lambda s: (s["started"] is None, s["started"] or ""))
     return sessions
 
 
-def _session_stats(events: list[tuple[str, str | None]]) -> dict:
+def _session_stats(
+    events: list[tuple[str, str | None]], started: str | None = None
+) -> dict:
     tools = [e for e in events if e[0] == "tool"]
     corrections = sum(1 for e in events if e[0] == "correction")
     return {
         "events": events,
+        "started": started,
         "n_tool_events": len(tools),
         "corrections": corrections,
         "errors": sum(1 for e in events if e[0] == "error"),
@@ -198,6 +208,90 @@ def conditional_next(sessions: list[dict], order: int = 2) -> dict[tuple, Counte
                 if i - k >= 0:
                     model[tuple(seq[i - k : i])][seq[i]] += 1
     return model
+
+
+def _top1(model: dict[tuple, Counter], tail: list[str], order: int, fallback: str | None) -> str | None:
+    """What the deployed model would actually answer here: longest context with
+    enough support, backing off, then the base-rate tool. Abstaining instead
+    would measure accuracy only where the model felt confident, which is how a
+    weak model comes to look strong."""
+    for k in range(min(order, len(tail)), 0, -1):
+        nxt = model.get(tuple(tail[-k:]))
+        if nxt and sum(nxt.values()) >= MIN_TRIGGER:
+            return nxt.most_common(1)[0][0]
+    return fallback
+
+
+def evaluate_next_move(
+    sessions: list[dict], order: int = 2, holdout: float = 0.2
+) -> dict | None:
+    """Out-of-sample top-1 accuracy for the next-move model, against base rate.
+
+    The Wilson bounds and lift gates elsewhere control noise in the FITTED
+    estimate, which is a different property from predicting anything. Nothing
+    here had ever been evaluated on data it was not fitted on, so "predictive"
+    was a description of the machinery rather than a measurement of it.
+
+    Fits on the earliest (1 - holdout) of sessions BY TIME and scores the most
+    recent holdout. The baseline is the single most frequent tool in the training
+    split -- the honest thing to beat, since a model that cannot beat "guess
+    Bash every time" is not predicting, it is describing a histogram. Both are
+    scored on identical positions.
+
+    Returns None when there is not enough ordered history to split at all; that
+    is a real answer and callers must not read it as success.
+    """
+    if len(sessions) < 5:
+        return None
+    cut = int(round(len(sessions) * (1.0 - holdout)))
+    cut = max(1, min(cut, len(sessions) - 1))
+    train, test = sessions[:cut], sessions[cut:]
+
+    model = conditional_next(train, order=order)
+    base = base_tool_freq(train)
+    if not base:
+        return None
+    base_top = max(base, key=lambda t: base[t])
+
+    hits = base_hits = total = covered = 0
+    for sess in test:
+        seq = _tool_seq(sess)
+        for i in range(1, len(seq)):
+            tail, truth = seq[:i], seq[i]
+            has_ctx = any(
+                (nxt := model.get(tuple(tail[-k:]))) is not None
+                and sum(nxt.values()) >= MIN_TRIGGER
+                for k in range(min(order, len(tail)), 0, -1)
+            )
+            pred = _top1(model, tail, order, base_top)
+            total += 1
+            covered += has_ctx
+            hits += pred == truth
+            base_hits += base_top == truth
+    if total == 0:
+        return None
+
+    acc = hits / total
+    base_acc = base_hits / total
+    return {
+        "n_train_sessions": len(train),
+        "n_test_sessions": len(test),
+        "n_predictions": total,
+        "context_coverage": round(covered / total, 4),
+        "top1_accuracy": round(acc, 4),
+        "baseline_accuracy": round(base_acc, 4),
+        "accuracy_minus_baseline": round(acc - base_acc, 4),
+        "beats_baseline": acc > base_acc,
+    }
+
+
+def predictive_claim_allowed(evaluation: dict | None) -> bool:
+    """Whether anything in this report may be called predictive.
+
+    Unmeasured is not the same as good. A missing or failed evaluation both
+    forbid the word.
+    """
+    return bool(evaluation and evaluation.get("beats_baseline"))
 
 
 def high_lift_moves(sessions: list[dict]) -> list[dict]:
@@ -607,13 +701,19 @@ FOOTER = (
 
 
 def build_next_moves(project_dir: str) -> dict[str, Any]:
-    mined = mine(parse_sessions(project_dir))
+    sessions = parse_sessions(project_dir)
+    mined = mine(sessions)
+    # Measured before anything is rendered, and carried on the report whatever it
+    # says. A figure that only appears when it flatters is not a measurement.
+    evaluation = evaluate_next_move(sessions)
     report = {
         "kind": "next_moves",
         "nudges": [
             {k: n[k] for k in ("family", "title", "body", "confidence")}
             for n in build_nudges(mined)
         ],
+        "evaluation": evaluation,
+        "predictive": predictive_claim_allowed(evaluation),
         "footer": FOOTER,
         "meta": {"sessions": mined["n_sessions"]},
     }
@@ -626,10 +726,18 @@ def build_next_moves(project_dir: str) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 def render_html(report: dict) -> str:
     nudges = report["nudges"]
+    ev = report.get("evaluation")
+    allowed = report.get("predictive", False)
+    # "Predictable" is a claim about out-of-sample performance, so it is spent
+    # only when out-of-sample performance earned it.
     teaser = (
         f"My most predictable moment: {nudges[0]['title'].rstrip('.')}"
-        if nudges
-        else "My Claude Code next-move read"
+        if nudges and allowed
+        else (
+            f"What my agent tends to do next: {nudges[0]['title'].rstrip('.')}"
+            if nudges
+            else "My Claude Code next-move read"
+        )
     )
     teaser_json = json.dumps({"line": teaser}, ensure_ascii=False).replace(
         "<", "\\u003c"
@@ -647,6 +755,40 @@ def render_html(report: dict) -> str:
             '<section><div class="kicker">NOT ENOUGH YET</div><h2>No pattern to read yet.</h2>'
             '<div class="empty">There aren\'t enough ordered sessions to mine a reliable next-move '
             "pattern. Come back after more real work.</div></section>"
+        )
+    if ev is None:
+        body_html += (
+            '<section><div class="kicker">NOT MEASURED</div>'
+            "<p>There isn't enough ordered history to hold sessions back and test "
+            "this on data it wasn't fitted to, so nothing here is claimed to "
+            "predict anything.</p></section>"
+        )
+    else:
+        pct = 100 * ev["top1_accuracy"]
+        bpct = 100 * ev["baseline_accuracy"]
+        if allowed:
+            verdict = (
+                f"Held out {ev['n_test_sessions']} of "
+                f"{ev['n_train_sessions'] + ev['n_test_sessions']} sessions by date and "
+                f"tested on {ev['n_predictions']:,} moves it never saw: the next move was "
+                f"called correctly {pct:.1f}% of the time, against {bpct:.1f}% for always "
+                f"guessing your single most-used tool. That is {pct - bpct:.1f} points of "
+                "real signal, and it is the whole of the claim."
+            )
+        else:
+            verdict = (
+                f"Held out {ev['n_test_sessions']} of "
+                f"{ev['n_train_sessions'] + ev['n_test_sessions']} sessions by date and "
+                f"tested on {ev['n_predictions']:,} moves it never saw: the next move was "
+                f"called correctly {pct:.1f}% of the time, against {bpct:.1f}% for always "
+                "guessing your single most-used tool. It does not beat that baseline, so "
+                "nothing below is a prediction — these are descriptions of what your "
+                "sessions already contain."
+            )
+        body_html += (
+            '<section><div class="kicker">'
+            + ("MEASURED OUT OF SAMPLE" if allowed else "DOES NOT BEAT BASE RATE")
+            + f'</div><p>{_esc(verdict)}</p></section>'
         )
     return f"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Cortex — What's Next</title>
