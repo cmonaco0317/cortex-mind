@@ -27,7 +27,7 @@ a separate stdlib-only Python tool that also lives in its own repo.
 ## How to run things
 
 ```bash
-python3 -m pytest -q                    # from repo root — 79 tests
+python3 -m pytest -q                    # from repo root — 85 tests
 cd frontend && npm ci && npm test       # vitest
 cd frontend && npm run build            # must stay green; CI deploys from dist/
 ```
