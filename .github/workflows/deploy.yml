@@ -78,6 +78,20 @@ jobs:
           done
           exit $fail
 
+      - name: Assert the npm audit figure the docs state
+        # README.md and SECURITY.md both say 0 advisories. If that stops being
+        # true, the docs are wrong and CI should say so rather than let the two
+        # drift apart again.
+        working-directory: frontend
+        run: |
+          npm audit --json > "$RUNNER_TEMP/audit.json" || true
+          count=$(node -p "require(process.env.RUNNER_TEMP + '/audit.json').metadata.vulnerabilities.total")
+          echo "npm audit advisories: $count"
+          if [ "$count" -ne 0 ]; then
+            echo "::error::README.md and SECURITY.md both state npm audit reports 0 advisories; it now reports $count"
+            exit 1
+          fi
+
   build:
     runs-on: ubuntu-latest
     steps:

@@ -174,12 +174,15 @@ python3 -m pytest        # from the repo root — 78 tests
 
 ## Security
 
-`npm audit` reports advisories including criticals. **None of them reach a page
-visitor** — the alarming one (`protobufjs`, via the ONNX runtime) is tree-shaken out
-of the build entirely, because the model is parsed by the vendored WebAssembly rather
-than in JavaScript. [SECURITY.md](SECURITY.md) shows the greps that prove it, explains
-what the advisories *do* put at risk (the build machine), and says why the remaining
-ones aren'''t force-fixed.
+`npm audit` currently reports **0 advisories** — and that number is not the argument.
+For a while it was 11, including three criticals, and **none of those reached a page
+visitor either**. The alarming one (`protobufjs`, via the ONNX runtime) is tree-shaken
+out of the build entirely, because the model is parsed by the vendored WebAssembly
+rather than in JavaScript. [SECURITY.md](SECURITY.md) shows the greps that prove it —
+CI runs all four against the built `dist/` on every push, and asserts the advisory
+count, so neither claim can go stale unnoticed — and explains what the advisories
+*did* put at risk (the build machine) and why `npm audit fix --force` was the wrong
+tool.
 
 ## License
 
