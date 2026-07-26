@@ -290,3 +290,53 @@ describe("the score actually ranks (§2.2/§2.3)", () => {
     expect(clusterDomains(unit)).toEqual(clusterDomains(unit));
   });
 });
+
+// SECURITY.md: "Secrets are redacted on ingest — before text becomes a neuron,
+// an insight, or a shareable card. Agent traces routinely contain API keys;
+// without this the watermarked share image would be a leak vector."
+//
+// That claim had no test at all, and it was false for the single likeliest
+// secret to appear in an agent trace. The Python half of this project already
+// learned this exact lesson (extract.py's _SECRET carries a comment about it);
+// the browser redactor had the same hole.
+//
+// Every sample below is obviously fake — a shape, never a credential.
+import { redactSecrets } from "../src/cortex/text";
+
+describe("secret redaction on ingest", () => {
+  const leaks = (s: string) => redactSecrets(s).includes(s.slice(0, 24));
+
+  it("redacts a real-shaped Anthropic key", () => {
+    // sk-ant-api03-… : the alphanumeric run after "sk-" breaks on a hyphen
+    // after three characters, which is what the old pattern could not survive.
+    expect(leaks("sk-ant-api03-" + "A".repeat(40) + "-" + "B".repeat(50))).toBe(false);
+  });
+
+  it("redacts the other common key shapes", () => {
+    for (const sample of [
+      "sk-ant-" + "C".repeat(30),
+      "sk-proj-" + "D".repeat(40),
+      "sk-" + "E".repeat(48),
+      "sk_live_" + "F".repeat(24),
+      "ghp_" + "G".repeat(36),
+      "github_pat_" + "H".repeat(30),
+      "AKIA" + "I".repeat(16),
+      "AIza" + "J".repeat(30),
+      "xoxb-" + "K".repeat(20),
+    ]) {
+      expect(leaks(sample), sample.slice(0, 12)).toBe(false);
+    }
+  });
+
+  it("redacts a key embedded in surrounding trace text", () => {
+    const line = 'ANTHROPIC_API_KEY="sk-ant-api03-' + "Z".repeat(60) + '" was exported';
+    const out = redactSecrets(line);
+    expect(out).not.toContain("sk-ant-api03-ZZZZ");
+    expect(out).toContain("was exported"); // ordinary text survives
+  });
+
+  it("leaves ordinary prose alone", () => {
+    const prose = "The transformer architecture scales with sequence length.";
+    expect(redactSecrets(prose)).toBe(prose);
+  });
+});
