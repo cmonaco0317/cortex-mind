@@ -27,6 +27,8 @@ Usage:
 
 import argparse
 import json
+import os
+from collections import Counter
 import sys
 
 from extract import model_family
@@ -351,6 +353,128 @@ def apply_diversity(cards, arch):
     return visible
 
 
+# --------------------------------------------------------------------------- #
+# Validating the archetype (3.2)
+# --------------------------------------------------------------------------- #
+# Wilson intervals, lift mining and leave-one-out sign checks are real machinery,
+# but they all sit DOWNSTREAM of a construct nobody validated. There is no ground
+# truth for "The Pouncer", no second rater, and nothing that would fail if labels
+# were assigned at random within their gates. Rigour downstream of an unvalidated
+# construct produces confident output, not evidence.
+#
+# Two checks, and the label is gated on the first:
+#   - STABILITY: leave one session out and see whether the label survives. A
+#     label that flips when a single session is removed is describing that
+#     session, not you.
+#   - NEGATIVE CONTROL: shuffle event order within sessions. Anything that claims
+#     to read ORDER must collapse. Whatever survives was never reading order.
+
+# A label that cannot survive this fraction of leave-one-session-out folds is not
+# reported as an identity. It is not a p-value and is not presented as one: it is
+# the share of folds that agreed, and the threshold is an editorial line drawn
+# before the number was measured.
+STABILITY_MIN = 0.70
+
+# Leave-one-out costs one full aggregation per fold. Above this many sessions a
+# deterministic spread is sampled instead, and the fold count is reported so the
+# figure is never mistaken for all-of-them.
+MAX_FOLDS = 40
+
+
+def _fold_files(files, max_folds):
+    if len(files) <= max_folds:
+        return list(files)
+    step = len(files) / float(max_folds)
+    return [files[int(i * step)] for i in range(max_folds)]
+
+
+def archetype_stability(project_dir, files=None, max_folds=MAX_FOLDS):
+    """How often the archetype survives dropping one session.
+
+    Returns None when there are too few sessions to say anything -- which is a
+    real answer, and callers must not read it as "stable".
+    """
+    import extract as E
+
+    if files is None:
+        files = sorted(f for f in os.listdir(project_dir) if f.endswith(".jsonl"))
+    if len(files) < 5:
+        return None
+
+    full = compute_archetype(E.aggregate(project_dir, files))
+    full_name = full["name"] if full else None
+
+    folds = _fold_files(files, max_folds)
+    names = []
+    for drop in folds:
+        subset = [f for f in files if f != drop]
+        a = compute_archetype(E.aggregate(project_dir, subset))
+        names.append(a["name"] if a else None)
+
+    agree = sum(1 for n in names if n == full_name)
+    others = Counter(n for n in names if n != full_name)
+    return {
+        "label": full_name,
+        "folds": len(names),
+        "sessions": len(files),
+        "sampled_folds": len(folds) < len(files),
+        "agreement": round(agree / len(names), 3),
+        "flip_rate": round(1 - agree / len(names), 3),
+        "runners_up": dict(others.most_common(3)),
+        "stable": (agree / len(names)) >= STABILITY_MIN,
+    }
+
+
+# Metrics a reader would reasonably assume depend on the ORDER of events within a
+# session. The control CLASSIFIES them empirically rather than trusting this list
+# -- which is the point, because the list was wrong when first written:
+#
+#   corrections_caught  98 -> 31       collapses (a correction needs an assistant
+#   pounce_median_sec   2.7s -> 1411s  turn to follow, so order is the signal)
+#   reread_pct          41.1 -> 41.1   UNCHANGED: it counts whether a file was read
+#                                      more than once, which is a set membership
+#                                      question, not an ordering one
+#   reversal_count      29 -> 29       UNCHANGED: keyword matches in your prompts
+#
+# So two of the four are order-independent, and no card may claim otherwise.
+_ORDER_CANDIDATES = (
+    "corrections_caught",
+    "pounce_median_sec",
+    "reread_pct",
+    "reversal_count",
+)
+
+
+def shuffled_control(project_dir, files=None, seed=1):
+    """Negative control: the same pipeline over shuffled within-session order.
+
+    An archetype that survives shuffling is not reading order, whatever its card
+    says. This reports both the label and the order-dependent metrics either
+    side, so "it survived" is a measurement rather than an impression.
+    """
+    import extract as E
+
+    if files is None:
+        files = sorted(f for f in os.listdir(project_dir) if f.endswith(".jsonl"))
+    real = E.aggregate(project_dir, files)
+    shuf = E.aggregate(project_dir, files, shuffle_seed=seed)
+    a_real = compute_archetype(real)
+    a_shuf = compute_archetype(shuf)
+    moved = {k: (real.get(k), shuf.get(k)) for k in _ORDER_CANDIDATES if real.get(k) != shuf.get(k)}
+    unmoved = {k: real.get(k) for k in _ORDER_CANDIDATES if real.get(k) == shuf.get(k)}
+    return {
+        "label_real": a_real["name"] if a_real else None,
+        "label_shuffled": a_shuf["name"] if a_shuf else None,
+        "label_survived_shuffle": bool(
+            a_real and a_shuf and a_real["name"] == a_shuf["name"]
+        ),
+        # measured, not assumed: what actually moved when order was destroyed
+        "order_dependent": {k: {"real": v[0], "shuffled": v[1]} for k, v in moved.items()},
+        "order_independent": unmoved,
+        "order_signal_collapsed": bool(moved),
+    }
+
+
 def compute_archetype(m):
     """Assign ONE named archetype from DEEP behavior — an identity, not a stat.
 
@@ -528,14 +652,74 @@ def compute_archetype(m):
     return cands[0] if cands else None
 
 
+def gate_archetype(arch, stability):
+    """Attach the measured stability to the label, and withhold the label
+    entirely when it is not stable enough to be an identity.
+
+    Below STABILITY_MIN the name is not shown at all: a label that changes when
+    one session is dropped is describing that session. The card says what was
+    measured instead of quietly presenting a coin flip as a personality.
+    """
+    if arch is None:
+        return None
+    out = dict(arch)
+    if stability is None:
+        out["stability"] = None
+        out["stability_note"] = (
+            "Not enough sessions to test whether this label survives dropping one. "
+            "Read it as a description of the data so far, not an identity."
+        )
+        return out
+    out["stability"] = {
+        "agreement": stability["agreement"],
+        "flip_rate": stability["flip_rate"],
+        "folds": stability["folds"],
+        "stable": stability["stable"],
+    }
+    if not stability["stable"]:
+        alts = ", ".join(stability["runners_up"]) or "a different label"
+        out["withheld"] = True
+        out["name"] = "No stable archetype"
+        out["tagline"] = "your sessions do not agree on one"
+        out["definition"] = (
+            "Dropping a single session changes this label %.0f%% of the time "
+            "(it becomes %s). That is not an identity, so it is not being shown "
+            "as one." % (100 * stability["flip_rate"], alts)
+        )
+        out["traits"] = [
+            "%d of %d leave-one-out folds agreed" % (
+                round(stability["agreement"] * stability["folds"]), stability["folds"]
+            ),
+            "threshold for showing a label: %.0f%% agreement" % (100 * STABILITY_MIN),
+            "the ranked cards below are unaffected — they are per-signal, not a label",
+        ]
+    else:
+        out["stability_note"] = (
+            "Survived %.0f%% of leave-one-session-out folds (%d tested)."
+            % (100 * stability["agreement"], stability["folds"])
+        )
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("metrics")
     ap.add_argument("--out", default="")
     ap.add_argument("--n", type=int, default=10)
+    ap.add_argument(
+        "--sessions",
+        default="",
+        help="session dir; enables the leave-one-out stability check and the "
+        "shuffled-order negative control (3.2)",
+    )
     args = ap.parse_args()
     m = json.load(open(args.metrics))
     arch = compute_archetype(m)
+    stability = control = None
+    if args.sessions:
+        stability = archetype_stability(args.sessions)
+        control = shuffled_control(args.sessions)
+    arch = gate_archetype(arch, stability) if args.sessions else arch
     cards = apply_diversity(build_cards(m), arch)[: args.n]
     out_list = ([arch] if arch else []) + cards
     if args.out:
@@ -545,6 +729,35 @@ def main() -> int:
         print(f"   {arch['definition']}")
         for t in arch["traits"]:
             print(f"     · {t}")
+        if arch.get("stability_note"):
+            print(f"   {arch['stability_note']}")
+    # Printed whether flattering or not: a measurement that only appears when it
+    # is favourable is not a measurement.
+    if stability:
+        print(
+            "\n  stability: %.0f%% agreement across %d leave-one-session-out folds "
+            "(flip rate %.0f%%)%s"
+            % (
+                100 * stability["agreement"],
+                stability["folds"],
+                100 * stability["flip_rate"],
+                "" if stability["stable"] else "  — BELOW THRESHOLD, label withheld",
+            )
+        )
+    if control:
+        print(
+            "  negative control (shuffled event order): label %s"
+            % (
+                "SURVIVED — it is not reading order"
+                if control["label_survived_shuffle"]
+                else "collapsed %s -> %s, as an order-dependent label should"
+                % (control["label_real"], control["label_shuffled"])
+            )
+        )
+        for k, v in control["order_dependent"].items():
+            print("    %-20s %s -> %s  (order-dependent)" % (k, v["real"], v["shuffled"]))
+        for k, v in control["order_independent"].items():
+            print("    %-20s %s (unchanged — NOT an order signal)" % (k, v))
     for i, c in enumerate(cards, 1):
         print(f"\n{i}. [{c['category']}]  {c['hero']}  —  {c['title']}")
         print(f"   {c['sub']}")
