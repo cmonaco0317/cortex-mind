@@ -190,7 +190,7 @@ package — `pip install numpy`. Everything else, including the whole test suite
 standard library only:
 
 ```bash
-python3 -m pytest        # from the repo root — 105 tests
+python3 -m pytest        # from the repo root — 113 tests
 ```
 
 ## Security

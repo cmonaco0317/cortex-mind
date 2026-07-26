@@ -386,6 +386,63 @@ def cluster_domains(unit: list[list[float]]) -> list[int]:
     return dom
 
 
+def rank_bridges(sim, order, Xn, corpus, lo, hi):
+    """Score and rank every candidate bridge, most-surprising-first.
+
+    Extracted from build_map so the blind-test harness can rank with the SAME
+    code the product ships rather than an approximation of it (§2.6). Its output
+    is asserted byte-for-byte by the §2.4 conformance golden, so this extraction
+    cannot silently change what build_map produces.
+    """
+    n = len(corpus)
+    nbr = hi
+    nbr_sets = [set(order[i, :nbr].tolist()) for i in range(n)]
+    # Cross-domain is measured from the embeddings, not the folder name (§2.3).
+    domain_of = cluster_domains(Xn.tolist())
+
+    cands: list[dict[str, Any]] = []
+    seen_pairs: set[tuple[int, int]] = set()
+    for i in range(n):
+        for j in order[i, lo:hi].tolist():
+            key = (min(i, j), max(i, j))
+            if key in seen_pairs:
+                continue
+            seen_pairs.add(key)
+            rel = float(sim[i, j])
+            if rel <= 0:  # unrelated isn't surprising, it's noise
+                continue
+            inter = len(nbr_sets[i] & nbr_sets[j])
+            union = len(nbr_sets[i]) + len(nbr_sets[j]) - inter
+            ov = inter / union if union else 0.0
+            # crossDomain is an embedding-derived cluster label (§2.3), reported
+            # as context. It is NOT a score multiplier: once the overlap window
+            # was fixed, a cross-domain bonus changed only ~6 of 59 selected
+            # pairs and never the top 10, because cross-cluster pairs ARE the
+            # low-overlap pairs -- the bonus was measuring, worse, what (1-overlap)
+            # already measures. Shipping it as a multiplier was shipping a term
+            # that was constant across every surfaced insight (§2.2).
+            cross = domain_of[i] != domain_of[j]
+            # Two passages of the SAME note are the commonest high-similarity
+            # pair once documents are split, and the least interesting: the
+            # author already put those ideas side by side, so nothing was
+            # discovered. Discounted so they can't crowd out real bridges.
+            src_i, src_j = corpus[i].get("source"), corpus[j].get("source")
+            same_doc = src_i is not None and src_i == src_j
+            cands.append(
+                {
+                    "i": i,
+                    "j": j,
+                    "sim": rel,
+                    "overlap": ov,
+                    "cross": cross,
+                    "same_doc": same_doc,
+                    "score": rel * (1.0 - ov) * (0.35 if same_doc else 1.0),
+                }
+            )
+    cands.sort(key=lambda c: -c["score"])
+    return cands
+
+
 def build_map(
     corpus: list[dict[str, Any]],
     name: str,
@@ -461,51 +518,7 @@ def build_map(
     # construction. Widen it to the candidate ceiling so two nodes bridging
     # separate neighbourhoods score LOW overlap and two nodes in one dense region
     # score HIGH -- the discrimination the term was supposed to carry.
-    nbr = hi
-    nbr_sets = [set(order[i, :nbr].tolist()) for i in range(n)]
-    # Cross-domain is measured from the embeddings, not the folder name (§2.3).
-    domain_of = cluster_domains(Xn.tolist())
-
-    cands: list[dict[str, Any]] = []
-    seen_pairs: set[tuple[int, int]] = set()
-    for i in range(n):
-        for j in order[i, lo:hi].tolist():
-            key = (min(i, j), max(i, j))
-            if key in seen_pairs:
-                continue
-            seen_pairs.add(key)
-            rel = float(sim[i, j])
-            if rel <= 0:  # unrelated isn't surprising, it's noise
-                continue
-            inter = len(nbr_sets[i] & nbr_sets[j])
-            union = len(nbr_sets[i]) + len(nbr_sets[j]) - inter
-            ov = inter / union if union else 0.0
-            # crossDomain is an embedding-derived cluster label (§2.3), reported
-            # as context. It is NOT a score multiplier: once the overlap window
-            # was fixed, a cross-domain bonus changed only ~6 of 59 selected
-            # pairs and never the top 10, because cross-cluster pairs ARE the
-            # low-overlap pairs -- the bonus was measuring, worse, what (1-overlap)
-            # already measures. Shipping it as a multiplier was shipping a term
-            # that was constant across every surfaced insight (§2.2).
-            cross = domain_of[i] != domain_of[j]
-            # Two passages of the SAME note are the commonest high-similarity
-            # pair once documents are split, and the least interesting: the
-            # author already put those ideas side by side, so nothing was
-            # discovered. Discounted so they can't crowd out real bridges.
-            src_i, src_j = corpus[i].get("source"), corpus[j].get("source")
-            same_doc = src_i is not None and src_i == src_j
-            cands.append(
-                {
-                    "i": i,
-                    "j": j,
-                    "sim": rel,
-                    "overlap": ov,
-                    "cross": cross,
-                    "same_doc": same_doc,
-                    "score": rel * (1.0 - ov) * (0.35 if same_doc else 1.0),
-                }
-            )
-    cands.sort(key=lambda c: -c["score"])
+    cands = rank_bridges(sim, order, Xn, corpus, lo, hi)
 
     # Diversity guard: without it the single most bridgeable concept takes every
     # slot and the deck is one node over and over.
