@@ -92,6 +92,41 @@ jobs:
             exit 1
           fi
 
+  copy-drift:
+    # agent-insights/ is byte-identical to the standalone cmonaco0317/agent-insights
+    # repo (CLAUDE.md constraint 4). Nothing enforced that but memory, and five
+    # commits had already been applied twice by hand. Now drift turns CI red.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch the other copy
+        env:
+          # Prefer a same-named branch on the other repo so a change made across
+          # both on a shared branch compares like-for-like; fall back to its
+          # default branch. Quoted via env, never interpolated into the shell.
+          OTHER_REF: ${{ github.head_ref || github.ref_name }}
+        run: |
+          # Validate before it reaches git: a ref is attacker-influencable on a
+          # fork PR, and one shaped like an option (--upload-pack=...) has no
+          # business being passed through. Anything unusual just falls back.
+          if ! printf '%s' "$OTHER_REF" | grep -Eq '^[A-Za-z0-9._/-]{1,200}$' \
+             || case "$OTHER_REF" in -*) true ;; *) false ;; esac; then
+            echo "ref '$OTHER_REF' is not a plain branch name; using the default branch"
+            OTHER_REF=""
+          fi
+          if [ -z "$OTHER_REF" ] || ! git clone --depth 1 --branch "$OTHER_REF" \
+                 https://github.com/cmonaco0317/agent-insights.git /tmp/other 2>/dev/null; then
+            echo "comparing against agent-insights' default branch"
+            git clone --depth 1 https://github.com/cmonaco0317/agent-insights.git /tmp/other
+          fi
+          git -C /tmp/other log -1 --format='compared against agent-insights %h (%s)'
+
+      - name: Fail if the two copies have drifted
+        run: python3 agent-insights/check_copy_drift.py agent-insights /tmp/other
+
   build:
     runs-on: ubuntu-latest
     steps:
