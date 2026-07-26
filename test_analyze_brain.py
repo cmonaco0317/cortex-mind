@@ -59,20 +59,21 @@ def test_it_runs_on_the_shipped_brain(capsys):
 
 def test_a_constant_factor_is_called_out_as_unable_to_rank(tmp_path, capsys):
     """The failure this whole instrument exists to surface: a factor that is the
-    same for every insight is decoration, and must be named as such."""
+    same for every insight is decoration, and must be named as such. overlap is
+    the one that carries this risk now that crossDomain is informational."""
     brain = {
         "meta": {"count": 2, "synapses": 1, "insights": 2, "dim": 8},
         "insights": [
             {
                 "s": 0,
                 "t": 1,
-                "score": round(0.5 * 1.0 * 1.15, 4),
+                "score": round(0.5 * 1.0, 4),
                 "evidence": {"sim": 0.5, "overlap": 0.0, "crossDomain": True},
             },
             {
                 "s": 0,
                 "t": 1,
-                "score": round(0.9 * 1.0 * 1.15, 4),
+                "score": round(0.9 * 1.0, 4),
                 "evidence": {"sim": 0.9, "overlap": 0.0, "crossDomain": True},
             },
         ],
@@ -82,10 +83,13 @@ def test_a_constant_factor_is_called_out_as_unable_to_rank(tmp_path, capsys):
 
     assert A.analyze(p) == 0
     out = capsys.readouterr().out
-    assert "CONSTANT" in out, "a constant crossDomain was not reported as constant"
+    # overlap constant at its degenerate value must be called out
+    assert "CONSTANT" in out, "a constant overlap was not reported as constant"
     assert "sit at the degenerate value" in out
     # with only cosine varying, the score IS cosine and the instrument must say so
     assert "Spearman(score, cosine) = 1.0000" in out
+    # crossDomain is context now, not a factor
+    assert "informational — not a score factor" in out
 
 
 def test_it_reports_when_stored_scores_contradict_the_documented_formula(
@@ -100,7 +104,7 @@ def test_it_reports_when_stored_scores_contradict_the_documented_formula(
             {
                 "s": 0,
                 "t": 1,
-                "score": 0.1234,  # unrelated to sim/overlap/crossDomain
+                "score": 0.1234,  # unrelated to sim x (1 - overlap)
                 "evidence": {"sim": 0.9, "overlap": 0.0, "crossDomain": True},
             }
         ],

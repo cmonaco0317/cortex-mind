@@ -67,3 +67,61 @@ So the honest summary is not "two of three factors do nothing". It is: one
 factor does nothing at all (`crossDomain`), one is inert for 92% of pairs but
 decisive for the handful where it fires (`overlap`), one could not be measured
 (`sameDocument`), and the remaining variance is cosine.
+
+
+---
+
+## After the fix (§2.2 window + §2.3 clustering + crossDomain deleted)
+
+Recorded 2026-07-24, on the SAME 237-concept corpus re-embedded with the same
+local `nomic-embed-text` model, scored by the fixed pipeline. (The committed
+`brain-safe.json` is not regenerated here — that is §2.5 — so `analyze_brain.py`
+run against it still shows the "before" numbers and now also flags that its
+stored scores predate the current formula.)
+
+```
+brain    : brain-final2.json
+meta     : 237 concepts, 1410 synapses, 59 insights, dim 768
+
+FACTORS
+  sim (cosine)   min   0.6113   median   0.6587   max   0.7276   spread  0.1163   var 5.987e-04
+  overlap        min   0.0714   median   0.1321   max   0.1881   spread  0.1167   var 8.012e-04
+                 0/59 (0%) sit at the degenerate value 0
+  1 - overlap    min   0.8119   median   0.8679   max   0.9286   spread  0.1167   var 8.012e-04
+                 0/59 (0%) sit at the degenerate value 1
+  crossDomain    true for 53/59 (90%)   informational — not a score factor
+  sameDocument   true for 0/59 (0%)   CONSTANT — cannot reorder anything
+
+  final score    min   0.5598   median   0.5779   max   0.6132   spread  0.0534   var 1.313e-04
+
+IS THE SCORE JUST COSINE?
+  Spearman(score, cosine) = 0.4369
+  top-5   agreement with a plain cosine ranking: 2/5 (40%)
+  top-10  agreement with a plain cosine ranking: 2/10 (20%)
+  top-20  agreement with a plain cosine ranking: 12/20 (60%)
+
+FORMULA CONSISTENCY (recomputed from the stored factors)
+  max |recomputed - stored| = 8.76e-05
+  stored scores match the documented formula
+```
+
+**What moved.** `overlap` went from 0.000 for 54/59 to a live factor spanning
+0.07–0.19, none at the degenerate value. Spearman(score, cosine) fell from
+**0.8469 to 0.4369**, and top-10 agreement with a plain cosine ranking fell from
+6/10 to **2/10** — the score is no longer cosine wearing a scalar. `crossDomain`
+is now an embedding-cluster label reported as context (no longer a multiplier),
+and having stopped filtering the selection it is non-constant among the surfaced
+insights (53/59) rather than the old 59/59.
+
+**What did not.** `1.15` and `0.35` were not tuned. The reordering came from the
+overlap **window**, not from any constant — the crossDomain ×1.15 term was
+removed entirely (see the remediation report for the selection-impact evidence),
+and the `0.35` same-note discount is untouched. `sameDocument` reads constant
+here only because `corpus_safe.json` has no multi-passage same-source documents;
+it fires on note-folder corpora, where one document splits into many passages.
+
+**A limitation this measurement does not cover.** The window fix discriminates
+only when the graph is much larger than the candidate window (n ≫ hi). For a
+small pasted corpus (n < ~120) `hi` reaches `n − 1`, the overlap neighbourhood
+becomes the whole graph, and overlap saturates near 1 again. The 237-node demo
+and any realistically sized corpus are fine; a 30-note paste is not.

@@ -160,11 +160,13 @@ function bridgeInsight(
     overlap === 0
       ? "they share no near neighbours at all"
       : `they share only ${Math.round(overlap * 100)}% of their near neighbours`;
+  // `cross` is embedding-cluster membership, not the folder name, so the prose
+  // describes the structure it actually measures rather than naming a domain.
   const where = sameDoc
     ? `both from “${a.source}” — the same note, so you already wrote them side by side`
     : cross
-      ? `bridging ${a.domain} and ${b.domain}`
-      : `inside ${a.domain}, between two groups that otherwise don't touch`;
+      ? `bridging two neighbourhoods that otherwise never touch`
+      : `between two groups in one neighbourhood that otherwise don't touch`;
   return {
     why:
       `${relatedness} (cosine ${sim.toFixed(2)}), yet ${separation} — ` +
@@ -299,6 +301,72 @@ export function textToConcepts(raw: string): Concept[] {
   return ingestText(raw).concepts;
 }
 
+/**
+ * Assign each concept a domain from the embedding space itself.
+ *
+ * The cross-domain term used to compare `concept.domain` — a slug of the parent
+ * FOLDER name. That is not "measured in the full embedding space" as the README
+ * claimed, and it collapses to a single value ("note") for pasted text or a flat
+ * corpus, which kills the term for the most likely first-use path.
+ *
+ * This clusters the unit vectors: farthest-point seeding from index 0, then
+ * nearest-hub assignment. Deterministic — no RNG, ties broken by the lowest
+ * index — so this browser path and build_brain.py produce identical labels (the
+ * cross-language contract §2.4 will lock). k follows the standard sqrt(n/2) rule
+ * of thumb; it is chosen from the data, not tuned.
+ *
+ * Mirrors cluster_domains() in build_brain.py.
+ */
+export function clusterDomains(unit: number[][]): number[] {
+  const n = unit.length;
+  if (n < 2) return new Array(n).fill(0);
+  const k = Math.max(2, Math.min(Math.round(Math.sqrt(n / 2)), n));
+
+  const sim = (a: number, b: number): number => {
+    const va = unit[a];
+    const vb = unit[b];
+    let s = 0;
+    for (let d = 0; d < va.length; d++) s += va[d] * vb[d];
+    return s;
+  };
+
+  const hubs = [0];
+  while (hubs.length < k) {
+    // the node farthest from every current hub = smallest max-similarity
+    let best = -1;
+    let bestVal = 2.0;
+    for (let i = 0; i < n; i++) {
+      if (hubs.includes(i)) continue;
+      let m = -2.0;
+      for (const h of hubs) {
+        const s = sim(i, h);
+        if (s > m) m = s;
+      }
+      if (m < bestVal - 1e-12) {
+        bestVal = m;
+        best = i;
+      }
+    }
+    if (best < 0) break;
+    hubs.push(best);
+  }
+
+  const dom = new Array(n).fill(0);
+  for (let i = 0; i < n; i++) {
+    let bi = 0;
+    let bv = -2.0;
+    for (let h = 0; h < hubs.length; h++) {
+      const s = sim(i, hubs[h]);
+      if (s > bv + 1e-12) {
+        bv = s;
+        bi = h;
+      }
+    }
+    dom[i] = bi;
+  }
+  return dom;
+}
+
 export function buildBrainMap(
   concepts: Concept[],
   vecs: number[][],
@@ -362,7 +430,16 @@ export function buildBrainMap(
   // artifact: a pair lands far apart in 3D precisely when PCA discarded the
   // axis on which they agree, so "most surprising" partly meant "worst
   // projected". Nothing was sorted either, despite the claim of ranking.
-  const NBR = Math.min(12, Math.max(2, n - 1));
+  const nBridges = Math.max(8, Math.floor(n / 4));
+  const lo = Math.min(12, Math.max(2, Math.floor(n / 4)));
+  const hi = Math.min(60, n - 1);
+  // Overlap must be measured over a neighbourhood that REACHES the candidate
+  // band, or it is always ~0: candidates are pairs ranked lo..hi apart, so a
+  // top-12 overlap set can never contain them and the Jaccard is empty by
+  // construction. Widen it to the candidate ceiling so two nodes bridging
+  // separate neighbourhoods score LOW overlap and two nodes in one dense region
+  // score HIGH -- the discrimination the term was supposed to carry.
+  const NBR = hi;
   const nbrSet = order.map((row) => new Set(row.slice(0, NBR)));
 
   const overlapOf = (i: number, j: number): number => {
@@ -374,9 +451,8 @@ export function buildBrainMap(
     return union ? inter / union : 0;
   };
 
-  const nBridges = Math.max(8, Math.floor(n / 4));
-  const lo = Math.min(12, Math.max(2, Math.floor(n / 4)));
-  const hi = Math.min(60, n - 1);
+  // Cross-domain is measured from the embeddings, not the folder name (§2.3).
+  const domainOf = clusterDomains(unit);
 
   type Cand = { i: number; j: number; score: number; sim: number; overlap: number; cross: boolean; sameDoc: boolean };
   const cands: Cand[] = [];
@@ -389,7 +465,12 @@ export function buildBrainMap(
       const rel = sim[i][j];
       if (rel <= 0) continue; // unrelated isn't surprising, it's noise
       const ov = overlapOf(i, j);
-      const cross = concepts[i].domain !== concepts[j].domain;
+      // crossDomain is an embedding-derived cluster label (§2.3), reported as
+      // context. It is NOT a score multiplier: once the overlap window was
+      // fixed, a cross-domain bonus changed only ~6 of 59 selected pairs and
+      // never the top 10, because cross-cluster pairs ARE the low-overlap pairs
+      // -- the bonus measured, worse, what (1 - overlap) already measures.
+      const cross = domainOf[i] !== domainOf[j];
       // Now that one document yields many passages, two chunks of the SAME note
       // are the commonest high-similarity pair in the graph — and the least
       // interesting: the author already put those ideas side by side. Nothing
@@ -404,7 +485,7 @@ export function buildBrainMap(
         overlap: ov,
         cross,
         sameDoc,
-        score: rel * (1 - ov) * (cross ? 1.15 : 1) * (sameDoc ? 0.35 : 1),
+        score: rel * (1 - ov) * (sameDoc ? 0.35 : 1),
       });
     }
   }

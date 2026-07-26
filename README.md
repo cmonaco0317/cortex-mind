@@ -27,14 +27,35 @@ comes with a "why" backed by the numbers behind it and an angle to pursue.
 Worth being precise, because it's the whole claim. A bridge is scored as
 
 ```
-surprise = relatedness × (1 − neighbourhood overlap) × cross-domain bonus
+surprise = relatedness × (1 − neighbourhood overlap) × same-note discount
 ```
 
-all measured in the **full embedding space**. The interesting case isn't two things
-that are far apart — those are just unrelated. It's a pair that is genuinely
-*related* while sitting in two neighbourhoods that never touch: two clusters meeting
-at a single point. Every card shows the cosine similarity and the measured neighbour
+Both live terms are measured in the **full embedding space**: `relatedness` is
+cosine similarity, and `neighbourhood overlap` is the Jaccard overlap of the two
+concepts' nearest-neighbour sets. The interesting case isn't two things that are
+far apart — those are just unrelated. It's a pair that is genuinely *related*
+while sitting in two neighbourhoods that never touch: two clusters meeting at a
+single point. Every card shows the cosine similarity and the measured neighbour
 overlap it's asserting, so you can check the claim rather than take it.
+
+The overlap term used to be dead — it was computed over each concept's 12
+nearest neighbours while the candidate pairs were drawn from ranks 12–60, so the
+two windows never met and the overlap was 0 for 54 of 59 shipped insights, which
+made the score cosine with a scalar on it. It is now measured over a
+neighbourhood that reaches the candidate band, and it carries the ranking: on the
+demo corpus the Spearman correlation between the final score and plain cosine
+fell from **0.85 to 0.44**, and only 2 of the top-10 insights survive as a plain
+cosine top-10.
+
+There used to be a third factor, a ×1.15 **cross-domain bonus**. It compared the
+parent *folder name* — not an embedding measurement, and uniformly "note" for
+pasted text — and once the overlap term worked it changed only ~6 of 59 selected
+pairs and never the top 10, because cross-cluster pairs already **are** the
+low-overlap pairs. It was deleted rather than shipped as an inert multiplier.
+Whether a pair crosses an **embedding-derived cluster** boundary is still
+computed (from the vectors, not a folder name) and shown on each card as
+context, so the grouping is a real measurement now — it just isn't multiplied
+into the score. The folder name, where a corpus has one, stays a display label.
 
 Two honest notes on that:
 
@@ -109,7 +130,7 @@ showing. The ranking above does that.)*
 |---|---|
 | **Neurons** | your concepts, embedded with `all-MiniLM-L6-v2` (384-dim), laid out in 3D via PCA |
 | **Synapses** | k-nearest-neighbour cosine similarity between concept embeddings |
-| **Bridges** | related-but-non-adjacent pairs, scored by `relatedness × (1 − neighbour overlap) × cross-domain bonus` and sorted |
+| **Bridges** | related-but-non-adjacent pairs, scored by `relatedness × (1 − neighbour overlap) × same-note discount` and sorted |
 | **Curiosity engine** | live spreading-activation with an attend → spread → dream-jump policy; the firing is emergent, not scripted. It animates the graph — the ranking above, not the walk, selects which connections surface |
 | **Insight Digest** | the ranked, evidence-backed export — the product |
 

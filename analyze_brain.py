@@ -4,11 +4,17 @@ analyze_brain.py — what each factor of the surprise score actually contributes
 
 The score is
 
-    score = sim x (1 - overlap) x (1.15 if crossDomain else 1) x (0.35 if sameDocument else 1)
+    score = sim x (1 - overlap) x (0.35 if sameDocument else 1)
 
 and it is only a *ranking* to the extent that each of those terms varies across
 the deck. A term that is constant, or that ranges over a hundredth, cannot
 reorder anything — it is a scalar wearing the costume of a factor.
+
+crossDomain is reported for context but is NOT a factor: it was a x1.15
+multiplier that, once the overlap window was fixed, changed ~6 of 59 selected
+pairs and never the top 10 -- cross-cluster pairs ARE the low-overlap pairs, so
+it measured, worse, what (1 - overlap) already measures. It is an embedding-
+derived cluster label now (§2.3), shown as evidence, not multiplied in.
 
 This script measures that rather than asserting it. For every factor it reports
 the spread, the variance, and the fraction sitting on the degenerate value, and
@@ -28,7 +34,6 @@ from pathlib import Path
 
 DEFAULT_BRAIN = Path(__file__).parent / "frontend" / "public" / "brain-safe.json"
 
-CROSS_BONUS = 1.15
 SAME_DOC_DISCOUNT = 0.35
 
 
@@ -144,16 +149,8 @@ def analyze(path):
 
     n_cross = sum(crosses)
     print(
-        "  %-14s true for %d/%d (%.0f%%)%s"
-        % (
-            "crossDomain",
-            n_cross,
-            len(crosses),
-            100.0 * n_cross / len(crosses),
-            "   CONSTANT — cannot reorder anything"
-            if n_cross in (0, len(crosses))
-            else "",
-        )
+        "  %-14s true for %d/%d (%.0f%%)   informational — not a score factor"
+        % ("crossDomain", n_cross, len(crosses), 100.0 * n_cross / len(crosses))
     )
     if same_docs is None:
         print(
@@ -205,7 +202,6 @@ def analyze(path):
         recomputed = (
             e["sim"]
             * (1.0 - e["overlap"])
-            * (CROSS_BONUS if e["crossDomain"] else 1.0)
             * (SAME_DOC_DISCOUNT if e.get("sameDocument") else 1.0)
         )
         worst = max(worst, abs(recomputed - ins["score"]))
@@ -215,7 +211,8 @@ def analyze(path):
         % (
             "stored scores match the documented formula"
             if worst < 5e-4
-            else "STORED SCORES DO NOT MATCH THE DOCUMENTED FORMULA"
+            else "STORED SCORES DO NOT MATCH THE DOCUMENTED FORMULA "
+            "(this brain predates the current scoring — regenerate it, §2.5)"
         )
     )
     return 0
