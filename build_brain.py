@@ -152,6 +152,28 @@ def llm_insight(
         return _fallback_insight(a, b, sim, overlap, cross)
 
 
+def folder_domain(rel_parts) -> str:
+    """The display domain for a file: its immediate parent folder, slugged.
+
+    Mirrors folderDomain() in frontend/src/cortex/ingest.ts, and the mirroring is
+    asserted by the conformance golden (§2.4). The two had diverged three ways:
+    this used the TOP-level folder (`rel.parts[0]`) while the browser used the
+    immediate parent, they truncated to 24 and 20 characters respectively, and an
+    unsluggable folder name fell back to "note" here and to "c" there. The same
+    nested corpus therefore got different labels depending on which pipeline ran.
+
+    The immediate parent wins because it is well defined in both contexts: the
+    browser only ever sees a relative path, where the top-level part is just the
+    name of whatever folder was dropped.
+
+    This is a DISPLAY label. Scoring uses embedding-derived clusters (§2.3).
+    """
+    if len(rel_parts) < 2:
+        return "note"
+    d = re.sub(r"[^a-z0-9]+", "-", str(rel_parts[-2]).lower()).strip("-")[:24]
+    return d or "note"
+
+
 def _slug(s: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")[:60] or "concept"
 
@@ -282,7 +304,7 @@ def ingest_folder(root: str, max_concepts: int) -> list[dict[str, Any]]:
         if len(text) < 30:
             continue  # skip near-empty files
         rel = p.relative_to(base)
-        domain = rel.parts[0] if len(rel.parts) > 1 else "note"
+        domain = folder_domain(rel.parts)
         label = title or p.stem.replace("-", " ").replace("_", " ").title()
         # One file used to become one concept, truncated to 600 chars. A long
         # note therefore lost most of its content and mean-pooled its remaining
@@ -298,7 +320,7 @@ def ingest_folder(root: str, max_concepts: int) -> list[dict[str, Any]]:
                         + (f"-{i}" if len(passages) > 1 else "")
                     ),
                     "label": (sub or label)[:60],
-                    "domain": _slug(domain)[:24] or "note",
+                    "domain": domain,
                     "text": ((sub + ". " if sub else label + ". ") + body)[
                         :PASSAGE_TEXT_CAP
                     ],

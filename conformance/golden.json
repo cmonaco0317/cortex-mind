@@ -1,0 +1,445 @@
+{
+ "_comment": "Expected output of the mirrored algorithms, asserted from BOTH languages (\u00a72.4). Regenerate deliberately, never to make a test pass.",
+ "folderDomains": [
+  "ai",
+  "note",
+  "b-c",
+  "note",
+  "three",
+  "a-very-long-folder-name-"
+ ],
+ "passages": [
+  [
+   {
+    "heading": "Title",
+    "text": "Intro paragraph about the topic."
+   },
+   {
+    "heading": "Section One",
+    "text": "Body of section one, which says a thing."
+   },
+   {
+    "heading": "Section Two",
+    "text": "Body of section two, which says another thing."
+   }
+  ],
+  [
+   {
+    "heading": "",
+    "text": "First idea, stated at some length so it clears the minimum."
+   },
+   {
+    "heading": "",
+    "text": "Second idea, also stated at some length so it clears it too."
+   },
+   {
+    "heading": "",
+    "text": "Third idea, likewise long enough to survive the fragment glue."
+   }
+  ],
+  [
+   {
+    "heading": "",
+    "text": "A proper opening paragraph with enough substance to stand alone."
+   },
+   {
+    "heading": "",
+    "text": "ok A closing paragraph that also has enough substance to stand alone."
+   }
+  ]
+ ],
+ "clusters": [
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  3,
+  3,
+  3,
+  3,
+  3,
+  3,
+  3,
+  3,
+  3,
+  3,
+  3,
+  3,
+  7,
+  7,
+  7,
+  7,
+  7,
+  7,
+  7,
+  7,
+  7,
+  7,
+  7,
+  7,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  2,
+  5,
+  5,
+  5,
+  5,
+  5,
+  5,
+  5,
+  5,
+  5,
+  5,
+  5,
+  5,
+  6,
+  6,
+  6,
+  6,
+  6,
+  6,
+  6,
+  6,
+  6,
+  6,
+  6,
+  6,
+  0,
+  0,
+  3,
+  2,
+  0,
+  0,
+  2,
+  2,
+  2,
+  2,
+  2,
+  3,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  4,
+  5,
+  2,
+  4,
+  3,
+  5,
+  3,
+  3,
+  1,
+  6,
+  1,
+  3,
+  6,
+  4,
+  1,
+  1,
+  6,
+  3,
+  1,
+  1,
+  3,
+  6,
+  3,
+  6,
+  4
+ ],
+ "bridges": [
+  {
+   "s": 47,
+   "t": 97,
+   "score": 0.4244,
+   "sim": 0.5866,
+   "overlap": 0.2766,
+   "crossDomain": false,
+   "sameDocument": false
+  },
+  {
+   "s": 55,
+   "t": 100,
+   "score": 0.3681,
+   "sim": 0.6087,
+   "overlap": 0.3953,
+   "crossDomain": false,
+   "sameDocument": false
+  },
+  {
+   "s": 55,
+   "t": 96,
+   "score": 0.3595,
+   "sim": 0.5516,
+   "overlap": 0.3483,
+   "crossDomain": false,
+   "sameDocument": false
+  },
+  {
+   "s": 94,
+   "t": 119,
+   "score": 0.3569,
+   "sim": 0.575,
+   "overlap": 0.3793,
+   "crossDomain": false,
+   "sameDocument": false
+  },
+  {
+   "s": 54,
+   "t": 100,
+   "score": 0.3567,
+   "sim": 0.5747,
+   "overlap": 0.3793,
+   "crossDomain": false,
+   "sameDocument": false
+  },
+  {
+   "s": 18,
+   "t": 99,
+   "score": 0.3527,
+   "sim": 0.6573,
+   "overlap": 0.4634,
+   "crossDomain": false,
+   "sameDocument": false
+  },
+  {
+   "s": 89,
+   "t": 119,
+   "score": 0.3484,
+   "sim": 0.5762,
+   "overlap": 0.3953,
+   "crossDomain": false,
+   "sameDocument": false
+  },
+  {
+   "s": 67,
+   "t": 118,
+   "score": 0.3474,
+   "sim": 0.5459,
+   "overlap": 0.3636,
+   "crossDomain": false,
+   "sameDocument": false
+  },
+  {
+   "s": 90,
+   "t": 108,
+   "score": 0.3467,
+   "sim": 0.5448,
+   "overlap": 0.3636,
+   "crossDomain": false,
+   "sameDocument": false
+  },
+  {
+   "s": 12,
+   "t": 99,
+   "score": 0.3439,
+   "sim": 0.6205,
+   "overlap": 0.4458,
+   "crossDomain": false,
+   "sameDocument": false
+  },
+  {
+   "s": 44,
+   "t": 97,
+   "score": 0.3396,
+   "sim": 0.4695,
+   "overlap": 0.2766,
+   "crossDomain": false,
+   "sameDocument": false
+  },
+  {
+   "s": 80,
+   "t": 96,
+   "score": 0.3392,
+   "sim": 0.5205,
+   "overlap": 0.3483,
+   "crossDomain": true,
+   "sameDocument": false
+  },
+  {
+   "s": 87,
+   "t": 108,
+   "score": 0.3331,
+   "sim": 0.6009,
+   "overlap": 0.4458,
+   "crossDomain": false,
+   "sameDocument": false
+  },
+  {
+   "s": 65,
+   "t": 118,
+   "score": 0.332,
+   "sim": 0.5811,
+   "overlap": 0.4286,
+   "crossDomain": false,
+   "sameDocument": false
+  },
+  {
+   "s": 86,
+   "t": 98,
+   "score": 0.3274,
+   "sim": 0.6548,
+   "overlap": 0.5,
+   "crossDomain": false,
+   "sameDocument": false
+  },
+  {
+   "s": 77,
+   "t": 104,
+   "score": 0.3265,
+   "sim": 0.5713,
+   "overlap": 0.4286,
+   "crossDomain": true,
+   "sameDocument": false
+  },
+  {
+   "s": 57,
+   "t": 110,
+   "score": 0.3239,
+   "sim": 0.5357,
+   "overlap": 0.3953,
+   "crossDomain": true,
+   "sameDocument": false
+  },
+  {
+   "s": 21,
+   "t": 112,
+   "score": 0.3205,
+   "sim": 0.4917,
+   "overlap": 0.3483,
+   "crossDomain": false,
+   "sameDocument": false
+  },
+  {
+   "s": 23,
+   "t": 117,
+   "score": 0.3167,
+   "sim": 0.5543,
+   "overlap": 0.4286,
+   "crossDomain": false,
+   "sameDocument": false
+  },
+  {
+   "s": 67,
+   "t": 111,
+   "score": 0.3128,
+   "sim": 0.5474,
+   "overlap": 0.4286,
+   "crossDomain": false,
+   "sameDocument": false
+  },
+  {
+   "s": 68,
+   "t": 116,
+   "score": 0.3118,
+   "sim": 0.5457,
+   "overlap": 0.4286,
+   "crossDomain": false,
+   "sameDocument": false
+  },
+  {
+   "s": 69,
+   "t": 111,
+   "score": 0.3103,
+   "sim": 0.5431,
+   "overlap": 0.4286,
+   "crossDomain": false,
+   "sameDocument": false
+  },
+  {
+   "s": 17,
+   "t": 117,
+   "score": 0.309,
+   "sim": 0.5959,
+   "overlap": 0.4815,
+   "crossDomain": false,
+   "sameDocument": false
+  },
+  {
+   "s": 76,
+   "t": 104,
+   "score": 0.3086,
+   "sim": 0.4736,
+   "overlap": 0.3483,
+   "crossDomain": true,
+   "sameDocument": false
+  },
+  {
+   "s": 88,
+   "t": 98,
+   "score": 0.3073,
+   "sim": 0.4829,
+   "overlap": 0.3636,
+   "crossDomain": false,
+   "sameDocument": false
+  },
+  {
+   "s": 54,
+   "t": 110,
+   "score": 0.307,
+   "sim": 0.4947,
+   "overlap": 0.3793,
+   "crossDomain": true,
+   "sameDocument": false
+  },
+  {
+   "s": 62,
+   "t": 109,
+   "score": 0.3056,
+   "sim": 0.5514,
+   "overlap": 0.4458,
+   "crossDomain": true,
+   "sameDocument": false
+  },
+  {
+   "s": 71,
+   "t": 116,
+   "score": 0.3022,
+   "sim": 0.5453,
+   "overlap": 0.4458,
+   "crossDomain": false,
+   "sameDocument": false
+  },
+  {
+   "s": 75,
+   "t": 114,
+   "score": 0.2978,
+   "sim": 0.4926,
+   "overlap": 0.3953,
+   "crossDomain": true,
+   "sameDocument": false
+  },
+  {
+   "s": 66,
+   "t": 109,
+   "score": 0.297,
+   "sim": 0.4785,
+   "overlap": 0.3793,
+   "crossDomain": true,
+   "sameDocument": false
+  }
+ ]
+}

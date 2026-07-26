@@ -183,7 +183,10 @@ export function isIngestable(name: string): boolean {
   return TEXT_EXTS.test(name) || /\.(jsonl|ndjson|json)$/i.test(name);
 }
 
-function cleanMarkdown(raw: string): { title: string; text: string } {
+/** Title + plain text from a markdown document. Mirrors _clean_markdown()
+ *  in build_brain.py; exported so the §2.4 conformance golden asserts the
+ *  production path rather than a copy of it. */
+export function cleanMarkdown(raw: string): { title: string; text: string } {
   let title = "";
   for (const ln of raw.split(/\r?\n/)) {
     const m = ln.trim().match(/^#{1,6}\s+(.*)/);
@@ -241,7 +244,7 @@ export function ingestFiles(files: Array<{ name: string; text: string }>): Inges
         continue;
       }
       const parts = f.name.split(/[/\\]/);
-      const domain = parts.length > 1 ? slug(parts[parts.length - 2]).slice(0, 20) : "note";
+      const domain = folderDomain(parts);
       const base = f.name.replace(/\.[^.]+$/, "");
       const docLabel = (title || parts[parts.length - 1].replace(/\.[^.]+$/, "")).slice(0, 60);
       // One file used to become one neuron. Now it becomes one neuron per
@@ -299,6 +302,32 @@ export function filesToConcepts(files: Array<{ name: string; text: string }>): C
 
 export function textToConcepts(raw: string): Concept[] {
   return ingestText(raw).concepts;
+}
+
+/**
+ * The display domain for a file: its immediate parent folder, slugged.
+ *
+ * Mirrors folder_domain() in build_brain.py, and the mirroring is asserted by the
+ * conformance golden (§2.4). The two had diverged three ways: build_brain.py used
+ * the TOP-level folder while this used the immediate parent, they truncated to 24
+ * and 20 characters respectively, and an unsluggable folder name fell back to
+ * "note" there and to "c" here (via slug()'s own fallback). The same nested corpus
+ * therefore got different labels depending on which pipeline ran.
+ *
+ * The immediate parent wins because it is well defined in both contexts: the
+ * browser only ever sees a relative path, where the top-level part is just the
+ * name of whatever folder was dropped.
+ *
+ * This is a DISPLAY label. Scoring uses embedding-derived clusters (§2.3).
+ */
+export function folderDomain(parts: string[]): string {
+  if (parts.length < 2) return "note";
+  const d = parts[parts.length - 2]
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 24);
+  return d || "note";
 }
 
 /**

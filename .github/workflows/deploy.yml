@@ -25,7 +25,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: python -m pip install --upgrade pip pytest
+      - name: Install the Python test requirements
+        # numpy is build_brain.py's documented requirement, and without it both
+        # the §2.4 cross-language conformance tests and the §2.3 clustering tests
+        # SKIP -- which would leave the Python half of the mirror contract
+        # unenforced while CI still went green. It is a dev requirement of the
+        # offline pipeline, not a runtime dependency of the shipped app.
+        run: python -m pip install --upgrade pip pytest numpy
 
       - name: Python tests, failing if pytest collects nothing
         # A suite that collects nothing must never read as a pass: pytest exits
@@ -39,6 +45,17 @@ jobs:
             exit 1
           fi
           python3 -m pytest -q
+
+      - name: Fail if the cross-language conformance tests did not actually run
+        # These are importorskip-gated on numpy. A skip is not a pass: if they
+        # stop running, the two implementations can drift with CI still green.
+        run: |
+          python3 -m pytest -q test_conformance.py test_build_brain.py \
+            -p no:randomly --no-header -rN | tee /tmp/conf.txt
+          if grep -qi 'skipped' /tmp/conf.txt; then
+            echo "::error::conformance/clustering tests SKIPPED — numpy missing, mirror contract unenforced"
+            exit 1
+          fi
 
       - uses: actions/setup-node@v4
         with:
