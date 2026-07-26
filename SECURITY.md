@@ -68,7 +68,8 @@ What worked instead, without touching `@xenova/transformers` at all:
   during a build, so they are the ones where the exposure was real.
 
 Verified before it was committed, because a major bump of the bundler is exactly the
-kind of change that passes CI and breaks the artifact: `tsc` clean, 36 tests green,
+kind of change that passes CI and breaks the artifact: `tsc` clean, all tests green
+(36 at the time; 48 now),
 `npm ci` reproducible from the committed lock, bundle within 1 kB of the previous
 build with an identical CSS hash, and the built page loaded in a browser and rendered
 the graph (237 neurons, 1,393 synapses) with an empty console. Node engines were

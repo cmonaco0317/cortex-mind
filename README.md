@@ -13,6 +13,13 @@ your browser** — no backend, no upload, no CDN.
 
 **▶ [Live demo](https://cmonaco0317.github.io/cortex-mind/)** — runs entirely in your browser; nothing is uploaded.
 
+> **What the demo is showing you.** The pre-loaded 237-concept brain was built by
+> the **offline** `build_brain.py` pipeline (768-dim `nomic-embed-text`, card text
+> written by a local llama3.2), not by the in-browser path this README describes.
+> Click **＋ your data** and everything below becomes literally true: 384-dim
+> `all-MiniLM-L6-v2` embeddings computed in your tab, and card text composed from
+> the measurements rather than generated.
+
 ---
 
 ## Why it exists
@@ -35,17 +42,26 @@ cosine similarity, and `neighbourhood overlap` is the Jaccard overlap of the two
 concepts' nearest-neighbour sets. The interesting case isn't two things that are
 far apart — those are just unrelated. It's a pair that is genuinely *related*
 while sitting in two neighbourhoods that never touch: two clusters meeting at a
-single point. Every card shows the cosine similarity and the measured neighbour
-overlap it's asserting, so you can check the claim rather than take it.
+single point. Every card in the **exported digest** carries the cosine similarity and the
+measured neighbour overlap behind it, so you can check the claim rather than take
+it. (On screen the card shows the prose; the numbers ride along on export.)
 
 The overlap term used to be dead — it was computed over each concept's 12
 nearest neighbours while the candidate pairs were drawn from ranks 12–60, so the
-two windows never met and the overlap was 0 for 54 of 59 shipped insights, which
-made the score cosine with a scalar on it. It is now measured over a
-neighbourhood that reaches the candidate band, and it carries the ranking: on the
-demo corpus the Spearman correlation between the final score and plain cosine
-fell from **0.85 to 0.44**, and only 2 of the top-10 insights survive as a plain
-cosine top-10.
+two windows never met and the overlap was 0 for 54 of 59 insights, which made the
+score cosine with a scalar on it. It is now measured over a neighbourhood that
+reaches the candidate band, and it carries the ranking: re-scoring the demo corpus
+drops the Spearman correlation between the final score and plain cosine from
+**0.85 to 0.44**, with only 2 of the top-10 insights surviving as a plain cosine
+top-10.
+
+⚠️ **Those are numbers from a re-scored rebuild, not from the artifact the live
+demo loads.** `frontend/public/brain-safe.json` was built before this fix and
+still carries the old scores — run `python3 analyze_brain.py` against it and it
+reports the 0.85, and flags that its stored scores predate the current formula.
+Regenerating it is tracked separately; until then the shipped deck is the old
+ranking. Both runs are recorded in
+[docs/bridge-score-baseline.md](docs/bridge-score-baseline.md).
 
 There used to be a third factor, a ×1.15 **cross-domain bonus**. It compared the
 parent *folder name* — not an embedding measurement, and uniformly "note" for
@@ -60,9 +76,12 @@ into the score. The folder name, where a corpus has one, stays a display label.
 Two honest notes on that:
 
 - **The card text is composed from measurements, not generated,** in the in-browser
-  path. Genuinely written explanations require a model, which the offline
-  `build_brain.py` pipeline uses (via local Ollama) and the browser deliberately does
-  not — that's the price of never phoning home.
+  path — the one that runs on your own data. Genuinely written explanations require a
+  model, which the offline `build_brain.py` pipeline uses (via local Ollama) and the
+  browser deliberately does not — that's the price of never phoning home.
+  **The pre-baked demo brain came from that offline pipeline**, so the cards you see
+  before dropping in your own data are llama3.2 prose, not composed measurements.
+  Drop in a corpus and you get the composed kind.
 - **A "concept" is a passage, not a whole document.** Files are split on their own
   structure — headings first, then paragraph breaks — so a note covering three ideas
   becomes three neurons instead of one blurred point sitting between all three. A
@@ -128,7 +147,7 @@ showing. The ranking above does that.)*
 
 | Layer | What it is |
 |---|---|
-| **Neurons** | your concepts, embedded with `all-MiniLM-L6-v2` (384-dim), laid out in 3D via PCA |
+| **Neurons** | your concepts, embedded with `all-MiniLM-L6-v2` (384-dim), laid out in 3D via PCA — this is the in-browser path, which is what runs on **your** data. The pre-baked demo brain was built by the offline pipeline instead (768-dim); see the demo note above |
 | **Synapses** | k-nearest-neighbour cosine similarity between concept embeddings |
 | **Bridges** | related-but-non-adjacent pairs, scored by `relatedness × (1 − neighbour overlap) × same-note discount` and sorted |
 | **Curiosity engine** | live spreading-activation with an attend → spread → dream-jump policy; the firing is emergent, not scripted. It animates the graph — the ranking above, not the walk, selects which connections surface |
@@ -141,7 +160,10 @@ showing. The ranking above does that.)*
 - **Build** — Vite + TypeScript; unit-tested with Vitest
 - **Zero external runtime dependencies** — the model and wasm are committed under
   [`frontend/public/`](frontend/public); see [PROVENANCE](frontend/public/models/PROVENANCE.md)
-  for exact files, sources, and licenses. Nothing is fetched at runtime.
+  for exact files, sources, and licenses. Nothing is fetched from a **third party**
+  at runtime — the only requests are same-origin (`brains.json`, `brain-*.json`,
+  and the vendored model and wasm), which is the claim that actually matters and
+  the one you can watch in the Network tab.
 
 ## Also in this repo
 
@@ -185,12 +207,15 @@ an earlier version passed the engine at ≥30% wins, which is at or below chance
 preferred twice as often. Read any result narrowly: one rater on one corpus is not
 evidence of a general effect, and the harness says so in its own output.
 
-`build_brain.py` and `blind_test.py` are the only Python here that needs a third-party
-package — `pip install numpy`. Everything else, including the whole test suite, is
-standard library only:
+`build_brain.py` and `blind_test.py` need `pip install numpy`, and so do the tests
+that cover them — the cross-language conformance golden, the clustering, and the
+blind-test power maths. The `agent-insights/` half is genuinely standard-library
+only, and its own repo's CI installs nothing but pytest to keep it that way.
 
 ```bash
-python3 -m pytest        # from the repo root — 123 tests
+python3 -m pytest        # from the repo root — 123 tests (106 without numpy,
+                         # which SKIPS the 17 that need it; CI installs numpy
+                         # and fails if they skip)
 ```
 
 ## Security
