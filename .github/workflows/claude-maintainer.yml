@@ -1,0 +1,82 @@
+name: Weekly maintainer
+
+# Runs itself once a week. Nobody has to start a session for this to happen.
+# It only files an issue when something is actually broken -- a silent run is
+# the healthy outcome.
+
+on:
+  schedule:
+    - cron: "0 14 * * 1"
+  workflow_dispatch:
+
+jobs:
+  maintain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Weekly health pass
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --max-turns 30
+          prompt: |
+            You are the unattended weekly maintainer for ${{ github.repository }},
+            a public repository that serves as portfolio work. Nobody is watching
+            this run. Your job is to find out whether the repo is still in the
+            state its README claims, and to stay quiet if it is.
+
+            Work through these four checks. Run real commands and read the real
+            output -- never assume a check passed.
+
+            1. TESTS. Install the project and its dev dependencies (look for
+               pyproject.toml, requirements*.txt, or a tests/ layout and pick the
+               right command), then run the full test suite. Record the exact
+               command you ran, the pass/fail counts, and any failures.
+
+            2. DEPENDENCIES. Check the declared dependencies for known published
+               vulnerabilities (`pip install pip-audit && pip-audit` is fine).
+               Report only genuine advisories against versions this repo actually
+               pins or allows.
+
+            3. README ACCURACY. Read the README, then verify its concrete claims
+               against the code: do the documented install commands work, do the
+               documented CLI flags and entry points still exist, are the stated
+               test counts or feature lists still true? Flag anything the README
+               promises that the code no longer does.
+
+            4. SECRET HYGIENE. Scan the tracked files for anything that looks like
+               a live credential (API keys, tokens, connection strings). This repo
+               is public, so treat any hit as urgent.
+
+            THEN, exactly one of:
+
+            - If everything passes: do NOT open an issue, do NOT comment anywhere.
+              Write a one-paragraph all-clear as your final message and stop. A
+              quiet week should leave no trace in the issue tracker.
+
+            - If something is broken: first search the existing OPEN issues for one
+              already titled "Weekly maintenance:". If it exists, add a comment
+              bringing it up to date and close out any line items that are now
+              fixed. If it does not exist, open ONE issue titled
+              "Weekly maintenance: <short summary>". Either way, write for a reader
+              who does not read code: lead with what is broken and what it means in
+              plain language, give the exact command that reproduces it, and put the
+              stack traces and diffs below that. Order the findings worst-first and
+              tag each one CRITICAL / HIGH / MEDIUM / LOW.
+
+            Do not open pull requests, do not push commits, and do not fix anything
+            this run. Report only.
