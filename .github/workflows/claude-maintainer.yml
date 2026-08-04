@@ -32,7 +32,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
-            --max-turns 30
+            --max-turns 80
           prompt: |
             You are the unattended weekly maintainer for ${{ github.repository }},
             a public repository that serves as portfolio work. Nobody is watching
@@ -41,6 +41,15 @@ jobs:
 
             Work through these four checks. Run real commands and read the real
             output -- never assume a check passed.
+
+            You have a bounded turn budget, so be economical: chain related shell
+            commands into one call (`pip install -e '.[dev]' && pytest -q`), do not
+            re-read a file you have already read, and do not explore the tree
+            beyond what a check actually needs. Budget roughly: setup+tests 25
+            turns, dependency audit 10, README verification 20, secret scan 10.
+            If you are running short, finish the checks you can and say plainly in
+            your report which ones you did not complete -- an honest partial report
+            beats being cut off mid-check.
 
             1. TESTS. Install the project and its dev dependencies (look for
                pyproject.toml, requirements*.txt, or a tests/ layout and pick the
