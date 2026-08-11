@@ -15,6 +15,135 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install the Python test requirements
+        # numpy is build_brain.py's documented requirement, and without it both
+        # the §2.4 cross-language conformance tests and the §2.3 clustering tests
+        # SKIP -- which would leave the Python half of the mirror contract
+        # unenforced while CI still went green. It is a dev requirement of the
+        # offline pipeline, not a runtime dependency of the shipped app.
+        run: python -m pip install --upgrade pip pytest numpy
+
+      - name: Python tests, failing if pytest collects nothing
+        # A suite that collects nothing must never read as a pass: pytest exits
+        # 5 on an empty collection, and a root collection error once silently
+        # took all 78 tests with it.
+        run: |
+          collected=$(python -m pytest --collect-only -q | grep -c '::' || true)
+          echo "collected python tests: $collected"
+          if [ "$collected" -eq 0 ]; then
+            echo "::error::pytest collected ZERO tests"
+            exit 1
+          fi
+          python3 -m pytest -q
+
+      - name: Fail if the cross-language conformance tests did not actually run
+        # These are importorskip-gated on numpy. A skip is not a pass: if they
+        # stop running, the two implementations can drift with CI still green.
+        run: |
+          python3 -m pytest -q test_conformance.py test_build_brain.py \
+            -p no:randomly --no-header -rN | tee /tmp/conf.txt
+          if grep -qi 'skipped' /tmp/conf.txt; then
+            echo "::error::conformance/clustering tests SKIPPED — numpy missing, mirror contract unenforced"
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+        working-directory: frontend
+
+      - name: Frontend tests, failing if vitest collects nothing
+        working-directory: frontend
+        run: |
+          npm test -- --reporter=json --outputFile="$RUNNER_TEMP/vitest.json"
+          node -e '
+            const r = require(process.env.RUNNER_TEMP + "/vitest.json");
+            console.log("collected vitest tests: " + r.numTotalTests);
+            if (!r.numTotalTests) {
+              console.log("::error::vitest collected ZERO tests");
+              process.exit(1);
+            }
+          '
+
+      - name: Build, then assert SECURITY.md's tree-shaking greps against dist/
+        # SECURITY.md presents these four greps as the proof that protobufjs
+        # never reaches a visitor. Unasserted, that proof has a shelf life of one
+        # dependency bump.
+        working-directory: frontend
+        run: |
+          npm run build
+          fail=0
+          for pat in 'protobufjs' 'onnx-proto' 'google/protobuf' '$protobuf'; do
+            if grep -rIlF -- "$pat" dist/ >/dev/null 2>&1; then
+              echo "::error::SECURITY.md says '$pat' is tree-shaken out of the build, but it is in dist/"
+              grep -rIlF -- "$pat" dist/
+              fail=1
+            else
+              echo "clean: $pat"
+            fi
+          done
+          exit $fail
+
+      - name: Assert the npm audit figure the docs state
+        # README.md and SECURITY.md both say 0 advisories. If that stops being
+        # true, the docs are wrong and CI should say so rather than let the two
+        # drift apart again.
+        working-directory: frontend
+        run: |
+          npm audit --json > "$RUNNER_TEMP/audit.json" || true
+          count=$(node -p "require(process.env.RUNNER_TEMP + '/audit.json').metadata.vulnerabilities.total")
+          echo "npm audit advisories: $count"
+          if [ "$count" -ne 0 ]; then
+            echo "::error::README.md and SECURITY.md both state npm audit reports 0 advisories; it now reports $count"
+            exit 1
+          fi
+
+  copy-drift:
+    # agent-insights/ is byte-identical to the standalone cmonaco0317/agent-insights
+    # repo (CLAUDE.md constraint 4). Nothing enforced that but memory, and five
+    # commits had already been applied twice by hand. Now drift turns CI red.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch the other copy
+        env:
+          # Prefer a same-named branch on the other repo so a change made across
+          # both on a shared branch compares like-for-like; fall back to its
+          # default branch. Quoted via env, never interpolated into the shell.
+          OTHER_REF: ${{ github.head_ref || github.ref_name }}
+        run: |
+          # Validate before it reaches git: a ref is attacker-influencable on a
+          # fork PR, and one shaped like an option (--upload-pack=...) has no
+          # business being passed through. Anything unusual just falls back.
+          if ! printf '%s' "$OTHER_REF" | grep -Eq '^[A-Za-z0-9._/-]{1,200}$' \
+             || case "$OTHER_REF" in -*) true ;; *) false ;; esac; then
+            echo "ref '$OTHER_REF' is not a plain branch name; using the default branch"
+            OTHER_REF=""
+          fi
+          if [ -z "$OTHER_REF" ] || ! git clone --depth 1 --branch "$OTHER_REF" \
+                 https://github.com/cmonaco0317/agent-insights.git /tmp/other 2>/dev/null; then
+            echo "comparing against agent-insights' default branch"
+            git clone --depth 1 https://github.com/cmonaco0317/agent-insights.git /tmp/other
+          fi
+          git -C /tmp/other log -1 --format='compared against agent-insights %h (%s)'
+
+      - name: Fail if the two copies have drifted
+        run: python3 agent-insights/check_copy_drift.py agent-insights /tmp/other
+
   build:
     runs-on: ubuntu-latest
     steps:
@@ -32,7 +161,7 @@ jobs:
           path: frontend/dist
 
   deploy:
-    needs: build
+    needs: [test, build]
     runs-on: ubuntu-latest
     environment:
       name: github-pages

@@ -185,8 +185,9 @@ describe("insight ranking + evidence", () => {
       expect(ins.evidence!.sim).toBeGreaterThan(0);
       expect(ins.evidence!.overlap).toBeGreaterThanOrEqual(0);
       expect(ins.evidence!.overlap).toBeLessThanOrEqual(1);
-      // score is relatedness x (1 - overlap) x cross-domain bonus
-      const expected = ins.evidence!.sim * (1 - ins.evidence!.overlap) * (ins.evidence!.crossDomain ? 1.15 : 1);
+      // score is relatedness x (1 - overlap) x same-note discount. crossDomain
+      // is an embedding-cluster label reported as context, not a multiplier.
+      const expected = ins.evidence!.sim * (1 - ins.evidence!.overlap) * (ins.evidence!.sameDocument ? 0.35 : 1);
       expect(Math.abs((ins.score ?? 0) - expected)).toBeLessThan(1e-3);
     }
   });
@@ -216,5 +217,126 @@ describe("insight ranking + evidence", () => {
       uses.set(ins.t, (uses.get(ins.t) ?? 0) + 1);
     }
     for (const [, count] of uses) expect(count).toBeLessThanOrEqual(2);
+  });
+});
+
+// §2.2 / §2.3: the surprise score was cosine in disguise — overlap was 0 for
+// almost every pair (candidate band and overlap window never met) and the
+// cross-domain term was a folder-name string compare, dead for pasted text.
+// These pin the fix: overlap now discriminates, the score reorders relative to
+// cosine, and domains come from the embeddings.
+import { clusterDomains } from "../src/cortex/ingest";
+
+describe("the score actually ranks (§2.2/§2.3)", () => {
+  // A realistic-sized corpus: 10 clusters x 18 nodes in 40D with noise. Overlap
+  // only discriminates when the graph is much larger than the candidate window
+  // (n >> hi), which is the regime the shipped 237-node brain is in and where
+  // the review measured overlap = 0 for 54/59. (Tiny pasted corpora, n < ~120,
+  // still saturate — a separate limitation noted in the remediation report.)
+  const clustered = (clusters = 10, perCluster = 18, dim = 40) => {
+    const vecs: number[][] = [];
+    const concepts: { id: string; label: string; domain: string; text: string }[] = [];
+    let seed = 7;
+    const jit = () => ((seed = (1103515245 * seed + 12345) & 0x7fffffff) / 0x7fffffff - 0.5);
+    for (let k = 0; k < clusters; k++)
+      for (let m = 0; m < perCluster; m++) {
+        // one-hot cluster centre (mod dim) plus noise — irregular neighbourhoods
+        vecs.push(Array.from({ length: dim }, (_, d) => (d % clusters === k ? 1 : 0) + 0.35 * jit()));
+        concepts.push({ id: `c${k}-${m}`, label: `n${k}-${m}`, domain: "note", text: "t" });
+      }
+    return { concepts, vecs };
+  };
+
+  it("overlap is no longer degenerate — it carries real variance", () => {
+    const { concepts, vecs } = clustered();
+    const insights = buildBrainMap(concepts, vecs, "clustered").insights ?? [];
+    expect(insights.length).toBeGreaterThan(3);
+    const ovs = insights.map((i) => i.evidence!.overlap);
+    // not every pair pinned to 0 (the old failure: 54/59 were exactly 0)
+    expect(ovs.some((o) => o > 0)).toBe(true);
+    // and they actually differ from one another
+    expect(new Set(ovs.map((o) => Math.round(o * 1000))).size).toBeGreaterThan(1);
+  });
+
+  it("the score reorders relative to plain cosine", () => {
+    const { concepts, vecs } = clustered();
+    const insights = buildBrainMap(concepts, vecs, "clustered").insights ?? [];
+    const byScore = [...insights];
+    const byCosine = [...insights].sort((a, b) => b.evidence!.sim - a.evidence!.sim);
+    // if the score were k×cosine, these orders would be identical
+    const same = byScore.every((ins, i) => ins === byCosine[i]);
+    expect(same).toBe(false);
+  });
+
+  it("clusterDomains is embedding-derived and non-constant on a flat corpus", () => {
+    // Every concept has domain "note" (the pasted-text / folderless case), which
+    // used to make crossDomain uniformly false. Clustering must recover >1 group.
+    const { vecs } = clustered();
+    const norm = (v: number[]) => {
+      const n = Math.sqrt(v.reduce((s, x) => s + x * x, 0)) || 1;
+      return v.map((x) => x / n);
+    };
+    const dom = clusterDomains(vecs.map(norm));
+    expect(new Set(dom).size).toBeGreaterThan(1);
+  });
+
+  it("clusterDomains is deterministic", () => {
+    const { vecs } = clustered();
+    const norm = (v: number[]) => {
+      const n = Math.sqrt(v.reduce((s, x) => s + x * x, 0)) || 1;
+      return v.map((x) => x / n);
+    };
+    const unit = vecs.map(norm);
+    expect(clusterDomains(unit)).toEqual(clusterDomains(unit));
+  });
+});
+
+// SECURITY.md: "Secrets are redacted on ingest — before text becomes a neuron,
+// an insight, or a shareable card. Agent traces routinely contain API keys;
+// without this the watermarked share image would be a leak vector."
+//
+// That claim had no test at all, and it was false for the single likeliest
+// secret to appear in an agent trace. The Python half of this project already
+// learned this exact lesson (extract.py's _SECRET carries a comment about it);
+// the browser redactor had the same hole.
+//
+// Every sample below is obviously fake — a shape, never a credential.
+import { redactSecrets } from "../src/cortex/text";
+
+describe("secret redaction on ingest", () => {
+  const leaks = (s: string) => redactSecrets(s).includes(s.slice(0, 24));
+
+  it("redacts a real-shaped Anthropic key", () => {
+    // sk-ant-api03-… : the alphanumeric run after "sk-" breaks on a hyphen
+    // after three characters, which is what the old pattern could not survive.
+    expect(leaks("sk-ant-api03-" + "A".repeat(40) + "-" + "B".repeat(50))).toBe(false);
+  });
+
+  it("redacts the other common key shapes", () => {
+    for (const sample of [
+      "sk-ant-" + "C".repeat(30),
+      "sk-proj-" + "D".repeat(40),
+      "sk-" + "E".repeat(48),
+      "sk_live_" + "F".repeat(24),
+      "ghp_" + "G".repeat(36),
+      "github_pat_" + "H".repeat(30),
+      "AKIA" + "I".repeat(16),
+      "AIza" + "J".repeat(30),
+      "xoxb-" + "K".repeat(20),
+    ]) {
+      expect(leaks(sample), sample.slice(0, 12)).toBe(false);
+    }
+  });
+
+  it("redacts a key embedded in surrounding trace text", () => {
+    const line = 'ANTHROPIC_API_KEY="sk-ant-api03-' + "Z".repeat(60) + '" was exported';
+    const out = redactSecrets(line);
+    expect(out).not.toContain("sk-ant-api03-ZZZZ");
+    expect(out).toContain("was exported"); // ordinary text survives
+  });
+
+  it("leaves ordinary prose alone", () => {
+    const prose = "The transformer architecture scales with sequence length.";
+    expect(redactSecrets(prose)).toBe(prose);
   });
 });

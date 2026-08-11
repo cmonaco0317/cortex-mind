@@ -36,8 +36,16 @@ export function redactSecrets(s: string): string {
   return s
     .replace(/-----BEGIN[A-Z ]*PRIVATE KEY-----[\s\S]*?-----END[A-Z ]*PRIVATE KEY-----/g, "[REDACTED KEY]")
     .replace(/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{6,}/g, "[REDACTED JWT]")
-    .replace(/\b(?:sk|pk|rk)[-_](?:live|test|proj|ant)?[-_]?[A-Za-z0-9]{16,}\b/gi, "[REDACTED]")
+    // NB: the character class allows - and _ ON PURPOSE. The previous pattern
+    // required an unbroken run of {16,} alphanumerics after the prefix, which
+    // does NOT match a real Anthropic key: sk-ant-api03-… breaks that run with a
+    // hyphen after only three characters. The single likeliest secret to appear
+    // in an agent trace was the one shape this missed, while SECURITY.md named
+    // agent traces as the exact reason the redactor exists. extract.py's _SECRET
+    // carries the same note — the Python half hit this first.
+    .replace(/\b(?:sk|pk|rk)[-_][A-Za-z0-9_-]{16,}/gi, "[REDACTED]")
     .replace(/\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}\b/g, "[REDACTED]")
+    .replace(/\bgithub_pat_[A-Za-z0-9_]{20,}\b/g, "[REDACTED]")
     .replace(/\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g, "[REDACTED]")
     .replace(/\bAKIA[0-9A-Z]{16}\b/g, "[REDACTED]")
     .replace(/\bAIza[0-9A-Za-z_-]{20,}\b/g, "[REDACTED]")

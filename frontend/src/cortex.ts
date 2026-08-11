@@ -99,7 +99,7 @@ async function main(): Promise<void> {
   }
   const keyOf = (ins: BrainInsight): string => (ins.s < ins.t ? `${ins.s}-${ins.t}` : `${ins.t}-${ins.s}`);
   // Ranking is decided once, where the graph is built (ingest.ts / build_brain.py):
-  //     surprise = relatedness x (1 - neighbour overlap) x cross-domain bonus
+  //     surprise = relatedness x (1 - neighbour overlap) x same-note discount
   // and rides along on each insight as `score`. This used to re-rank here by
   // ASCENDING cosine similarity — i.e. "least related first" — which is the
   // opposite notion of surprise and disagreed with the builder. Two rankings

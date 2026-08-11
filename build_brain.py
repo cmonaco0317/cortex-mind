@@ -70,19 +70,19 @@ def _fallback_insight(
     b: dict[str, Any],
     sim: float | None = None,
     overlap: float | None = None,
+    cross: bool = False,
 ) -> dict[str, str]:
     """Used when the local LLM is unavailable or returns nothing usable.
 
     Every clause states a number that was actually measured. The previous version
-    asserted that each pair "rarely appear together" without checking anything,
-    and contradicted itself on same-domain pairs.
+    asserted that each pair "rarely appear together" without checking anything.
+    `cross` is embedding-cluster membership (§2.3), not the folder name, so the
+    prose describes the structure it measures rather than naming a domain.
     """
-    da, db = a.get("domain", "?"), b.get("domain", "?")
-    cross = da != db
     where = (
-        f"bridging {da} and {db}"
+        "bridging two neighbourhoods that otherwise never touch"
         if cross
-        else f"inside {da}, between two groups that otherwise don't touch"
+        else "between two groups in one neighbourhood that otherwise don't touch"
     )
     if sim is None or overlap is None:
         return {
@@ -113,6 +113,7 @@ def llm_insight(
     b: dict[str, Any],
     sim: float | None = None,
     overlap: float | None = None,
+    cross: bool = False,
 ) -> dict[str, str]:
     """Precompute (at build time, locally) why a long-range bridge is non-obvious.
 
@@ -145,10 +146,32 @@ def llm_insight(
             data = json.loads(json.loads(resp.read())["response"])
         why = _trim(str(data.get("why", "")), 240)
         angle = _trim(str(data.get("angle", "")), 200)
-        fb = _fallback_insight(a, b, sim, overlap)
+        fb = _fallback_insight(a, b, sim, overlap, cross)
         return {"why": why or fb["why"], "angle": angle or fb["angle"]}
     except (OSError, ValueError, KeyError):
-        return _fallback_insight(a, b, sim, overlap)
+        return _fallback_insight(a, b, sim, overlap, cross)
+
+
+def folder_domain(rel_parts) -> str:
+    """The display domain for a file: its immediate parent folder, slugged.
+
+    Mirrors folderDomain() in frontend/src/cortex/ingest.ts, and the mirroring is
+    asserted by the conformance golden (§2.4). The two had diverged three ways:
+    this used the TOP-level folder (`rel.parts[0]`) while the browser used the
+    immediate parent, they truncated to 24 and 20 characters respectively, and an
+    unsluggable folder name fell back to "note" here and to "c" there. The same
+    nested corpus therefore got different labels depending on which pipeline ran.
+
+    The immediate parent wins because it is well defined in both contexts: the
+    browser only ever sees a relative path, where the top-level part is just the
+    name of whatever folder was dropped.
+
+    This is a DISPLAY label. Scoring uses embedding-derived clusters (§2.3).
+    """
+    if len(rel_parts) < 2:
+        return "note"
+    d = re.sub(r"[^a-z0-9]+", "-", str(rel_parts[-2]).lower()).strip("-")[:24]
+    return d or "note"
 
 
 def _slug(s: str) -> str:
@@ -281,7 +304,7 @@ def ingest_folder(root: str, max_concepts: int) -> list[dict[str, Any]]:
         if len(text) < 30:
             continue  # skip near-empty files
         rel = p.relative_to(base)
-        domain = rel.parts[0] if len(rel.parts) > 1 else "note"
+        domain = folder_domain(rel.parts)
         label = title or p.stem.replace("-", " ").replace("_", " ").title()
         # One file used to become one concept, truncated to 600 chars. A long
         # note therefore lost most of its content and mean-pooled its remaining
@@ -297,7 +320,7 @@ def ingest_folder(root: str, max_concepts: int) -> list[dict[str, Any]]:
                         + (f"-{i}" if len(passages) > 1 else "")
                     ),
                     "label": (sub or label)[:60],
-                    "domain": _slug(domain)[:24] or "note",
+                    "domain": domain,
                     "text": ((sub + ". " if sub else label + ". ") + body)[
                         :PASSAGE_TEXT_CAP
                     ],
@@ -311,6 +334,113 @@ def ingest_folder(root: str, max_concepts: int) -> list[dict[str, Any]]:
         )
         concepts = concepts[:max_concepts]
     return concepts
+
+
+def cluster_domains(unit: list[list[float]]) -> list[int]:
+    """Assign each concept a domain from the embedding space itself.
+
+    The cross-domain bonus used to compare `corpus[i].domain` -- a slug of the
+    parent FOLDER name. That is not "measured in the full embedding space" as the
+    README claimed, and it collapses to a single value ("note") for pasted text
+    or a flat corpus, which kills the term for the most likely first-use path.
+
+    This clusters the unit vectors instead: farthest-point seeding from index 0,
+    then nearest-hub assignment. It is deterministic -- no RNG, ties broken by the
+    lowest index -- so the browser ingest path and this pipeline can produce
+    identical labels (the cross-language contract §2.4 will lock). k follows the
+    standard sqrt(n/2) rule of thumb; it is chosen from the data, not tuned.
+
+    Mirrors clusterDomains() in frontend/src/cortex/ingest.ts.
+    """
+    n = len(unit)
+    if n < 2:
+        return [0] * n
+    k = max(2, min(round((n / 2) ** 0.5), n))
+
+    def sim(a: int, b: int) -> float:
+        va, vb = unit[a], unit[b]
+        return sum(va[d] * vb[d] for d in range(len(va)))
+
+    hubs = [0]
+    while len(hubs) < k:
+        # the node farthest from every current hub = smallest max-similarity
+        best, best_val = -1, 2.0
+        for i in range(n):
+            if i in hubs:
+                continue
+            m = max(sim(i, h) for h in hubs)
+            if m < best_val - 1e-12:
+                best_val, best = m, i
+        if best < 0:
+            break
+        hubs.append(best)
+
+    dom = []
+    for i in range(n):
+        bi, bv = 0, -2.0
+        for hi, h in enumerate(hubs):
+            s = sim(i, h)
+            if s > bv + 1e-12:
+                bv, bi = s, hi
+        dom.append(bi)
+    return dom
+
+
+def rank_bridges(sim, order, Xn, corpus, lo, hi):
+    """Score and rank every candidate bridge, most-surprising-first.
+
+    Extracted from build_map so the blind-test harness can rank with the SAME
+    code the product ships rather than an approximation of it (§2.6). Its output
+    is asserted byte-for-byte by the §2.4 conformance golden, so this extraction
+    cannot silently change what build_map produces.
+    """
+    n = len(corpus)
+    nbr = hi
+    nbr_sets = [set(order[i, :nbr].tolist()) for i in range(n)]
+    # Cross-domain is measured from the embeddings, not the folder name (§2.3).
+    domain_of = cluster_domains(Xn.tolist())
+
+    cands: list[dict[str, Any]] = []
+    seen_pairs: set[tuple[int, int]] = set()
+    for i in range(n):
+        for j in order[i, lo:hi].tolist():
+            key = (min(i, j), max(i, j))
+            if key in seen_pairs:
+                continue
+            seen_pairs.add(key)
+            rel = float(sim[i, j])
+            if rel <= 0:  # unrelated isn't surprising, it's noise
+                continue
+            inter = len(nbr_sets[i] & nbr_sets[j])
+            union = len(nbr_sets[i]) + len(nbr_sets[j]) - inter
+            ov = inter / union if union else 0.0
+            # crossDomain is an embedding-derived cluster label (§2.3), reported
+            # as context. It is NOT a score multiplier: once the overlap window
+            # was fixed, a cross-domain bonus changed only ~6 of 59 selected
+            # pairs and never the top 10, because cross-cluster pairs ARE the
+            # low-overlap pairs -- the bonus was measuring, worse, what (1-overlap)
+            # already measures. Shipping it as a multiplier was shipping a term
+            # that was constant across every surfaced insight (§2.2).
+            cross = domain_of[i] != domain_of[j]
+            # Two passages of the SAME note are the commonest high-similarity
+            # pair once documents are split, and the least interesting: the
+            # author already put those ideas side by side, so nothing was
+            # discovered. Discounted so they can't crowd out real bridges.
+            src_i, src_j = corpus[i].get("source"), corpus[j].get("source")
+            same_doc = src_i is not None and src_i == src_j
+            cands.append(
+                {
+                    "i": i,
+                    "j": j,
+                    "sim": rel,
+                    "overlap": ov,
+                    "cross": cross,
+                    "same_doc": same_doc,
+                    "score": rel * (1.0 - ov) * (0.35 if same_doc else 1.0),
+                }
+            )
+    cands.sort(key=lambda c: -c["score"])
+    return cands
 
 
 def build_map(
@@ -380,47 +510,15 @@ def build_map(
     # projection artifact: a pair lands far apart in 3D precisely when PCA
     # discarded the axis on which they agree), and never sorted the result at
     # all -- despite the docs promising "ranked most-surprising-first".
-    nbr = min(12, max(2, n - 1))
-    nbr_sets = [set(order[i, :nbr].tolist()) for i in range(n)]
     lo = min(12, max(2, n // 4))  # scale band so small corpora still bridge
     hi = min(60, n - 1)
-
-    cands: list[dict[str, Any]] = []
-    seen_pairs: set[tuple[int, int]] = set()
-    for i in range(n):
-        for j in order[i, lo:hi].tolist():
-            key = (min(i, j), max(i, j))
-            if key in seen_pairs:
-                continue
-            seen_pairs.add(key)
-            rel = float(sim[i, j])
-            if rel <= 0:  # unrelated isn't surprising, it's noise
-                continue
-            inter = len(nbr_sets[i] & nbr_sets[j])
-            union = len(nbr_sets[i]) + len(nbr_sets[j]) - inter
-            ov = inter / union if union else 0.0
-            cross = corpus[i].get("domain") != corpus[j].get("domain")
-            # Two passages of the SAME note are the commonest high-similarity
-            # pair once documents are split, and the least interesting: the
-            # author already put those ideas side by side, so nothing was
-            # discovered. Discounted so they can't crowd out real bridges.
-            src_i, src_j = corpus[i].get("source"), corpus[j].get("source")
-            same_doc = src_i is not None and src_i == src_j
-            cands.append(
-                {
-                    "i": i,
-                    "j": j,
-                    "sim": rel,
-                    "overlap": ov,
-                    "cross": cross,
-                    "same_doc": same_doc,
-                    "score": rel
-                    * (1.0 - ov)
-                    * (1.15 if cross else 1.0)
-                    * (0.35 if same_doc else 1.0),
-                }
-            )
-    cands.sort(key=lambda c: -c["score"])
+    # Overlap must be measured over a neighbourhood that REACHES the candidate
+    # band, or it is always ~0: candidates are pairs ranked lo..hi apart, so a
+    # top-12 overlap set can never contain them and the Jaccard is empty by
+    # construction. Widen it to the candidate ceiling so two nodes bridging
+    # separate neighbourhoods score LOW overlap and two nodes in one dense region
+    # score HIGH -- the discrimination the term was supposed to carry.
+    cands = rank_bridges(sim, order, Xn, corpus, lo, hi)
 
     # Diversity guard: without it the single most bridgeable concept takes every
     # slot and the deck is one node over and over.
@@ -459,7 +557,11 @@ def build_map(
         print(f"generating {len(bridges)} insight cards (local LLM)…", flush=True)
         for idx, c in enumerate(bridges):
             card = llm_insight(
-                corpus[c["i"]], corpus[c["j"]], sim=c["sim"], overlap=c["overlap"]
+                corpus[c["i"]],
+                corpus[c["j"]],
+                sim=c["sim"],
+                overlap=c["overlap"],
+                cross=c["cross"],
             )
             insights.append(
                 {

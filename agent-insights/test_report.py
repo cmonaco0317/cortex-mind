@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests for report.py — the Operator Report engine (Phase 1 paid tier).
+Tests for report.py — the Operator Report engine.
 
 These encode the LOCKED design guarantees from OPERATOR-REPORT.md as PROPERTIES,
 not one golden case + denylists (an adversarial review showed the first cut was
@@ -771,7 +771,7 @@ def test_a_typical_profile_earns_a_tax_and_a_clean_run_still_earns_none():
     """The breadth decision, pinned in both directions.
 
     With only three taxes — each gated on one specific signal pair — 28% of a
-    432-profile grid earned nothing at all, so the paid tier shipped as pure
+    432-profile grid earned nothing at all, so the report shipped as pure
     compliments for more than a quarter of plausible operators. The library was
     broadened (unwritten-brief, long-thread, double-check), NOT loosened: every
     tax still fires on a pair, and a genuinely balanced operator must still earn
@@ -925,3 +925,33 @@ def test_model_family_collapses_build_identifiers():
     assert E.model_family("claude-haiku-4-5-20251001") == "haiku"
     assert E.model_family("claude-fable-5") == "other"
     assert E.model_family("<synthetic>") == "other"
+
+
+def test_no_commercial_framing_on_a_report_that_cannot_be_bought():
+    """report.py opened by calling itself a "Phase 1 paid tier" and split the
+    product into free cards and a paid layer. There is no payment flow anywhere
+    in this repo, so a reader took that framing as a claim about something they
+    could buy.
+
+    This module excludes itself from the scan, since it has to contain the words
+    it forbids in order to look for them.
+    """
+    import os
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    myself = os.path.basename(os.path.abspath(__file__))
+    framing = re.compile(r"\bpaid\b|\bfree tier\b|\bpricing\b|\bpaywall\b", re.I)
+
+    offenders = []
+    for name in sorted(os.listdir(here)):
+        if name == myself or not name.endswith(".py"):
+            continue
+        with open(os.path.join(here, name), encoding="utf-8") as fh:
+            for lineno, line in enumerate(fh, 1):
+                if framing.search(line):
+                    offenders.append("%s:%d: %s" % (name, lineno, line.strip()))
+
+    assert not offenders, (
+        "commercial framing attached to a report with no payment flow:\n"
+        + "\n".join(offenders)
+    )

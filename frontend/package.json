@@ -5,7 +5,15 @@
   "description": "Turn any corpus into a 3D thinking brain — a local, in-browser curiosity engine that surfaces non-obvious connections as an evidence-backed Insight Digest.",
   "author": "Carter Monaco",
   "license": "MIT",
-  "keywords": ["embeddings", "transformers.js", "three.js", "knowledge-graph", "local-first", "visualization", "curiosity-engine"],
+  "keywords": [
+    "embeddings",
+    "transformers.js",
+    "three.js",
+    "knowledge-graph",
+    "local-first",
+    "visualization",
+    "curiosity-engine"
+  ],
   "comment": "Versions are pinned EXACTLY (no ^ ranges) on purpose: this is a self-contained artifact meant to survive with no active maintainer. Install with `npm ci` (uses the committed package-lock.json) so a fresh clone builds the same bytes forever. The embedding model + ONNX-runtime wasm are vendored under public/models and public/ort — no CDN at runtime.",
   "comment_overrides": "@xenova/transformers is deprecated at 2.17.2 and has no forward security fix, so `npm audit fix --force` proposes DOWNGRADING it to 1.4.2 — a breaking two-year-old major. Do not run it. Instead its two vulnerable transitives are pinned forward here. Neither reaches the shipped bundle: protobufjs (via onnx-proto, Node-only path) is tree-shaken out entirely, and sharp is replaced by an empty stub in the browser branch — verified by grepping dist. The overrides exist so the dependency graph is clean too, not because the deployed artifact was exposed.",
   "scripts": {
@@ -27,6 +35,7 @@
   },
   "overrides": {
     "protobufjs": "7.6.5",
-    "sharp": "0.35.3"
+    "sharp": "0.35.3",
+    "brace-expansion": "5.0.8"
   }
 }

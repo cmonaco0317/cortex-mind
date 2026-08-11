@@ -22,6 +22,7 @@ import argparse
 import hashlib
 import json
 import os
+import random
 import re
 import statistics
 import sys
@@ -79,6 +80,16 @@ _SECRET = re.compile(
     r"|-----BEGIN[A-Z ]*PRIVATE KEY-----"  # PEM private key
     r"|\bBearer\s+[A-Za-z0-9._-]{16,}"  # bearer token
 )
+
+
+def _stable_key(name):
+    """A small integer from a filename, without hash() -- which is salted per
+    process and would make the control unreproducible run to run."""
+    h = 0x811C9DC5
+    for ch in str(name):
+        h ^= ord(ch) & 0xFF
+        h = (h * 0x01000193) & 0xFFFFFFFF
+    return h
 
 
 def _leaky(s):
@@ -158,16 +169,21 @@ def is_tool_result(content):
     )
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("project_dir")
-    ap.add_argument("--out", default="")
-    args = ap.parse_args()
+def aggregate(project_dir, files=None, shuffle_seed=None):
+    """Compute the metrics dict from a set of session files.
 
-    files = sorted(f for f in os.listdir(args.project_dir) if f.endswith(".jsonl"))
-    if not files:
-        print("no .jsonl files", file=sys.stderr)
-        return 1
+    Split out of main() so the same aggregation can be run over SUBSETS of
+    sessions (leave-one-session-out stability, taxonomy.py) and over shuffled
+    event order (the negative control). It was inlined in main(), which made
+    both impossible to ask for: there was exactly one way to run the pipeline,
+    over everything, once.
+
+    `shuffle_seed` shuffles the lines WITHIN each session before aggregating.
+    Order-dependent findings must collapse under it; anything that survives was
+    never reading order in the first place.
+    """
+    if files is None:
+        files = sorted(f for f in os.listdir(project_dir) if f.endswith(".jsonl"))
 
     tools = Counter()
     mcp_servers = Counter()
@@ -198,7 +214,7 @@ def main() -> int:
     latest_night = None  # hour of the latest-started assistant activity (0-5 = night)
 
     for fn in files:
-        path = os.path.join(args.project_dir, fn)
+        path = os.path.join(project_dir, fn)
         n_sessions += 1
         first_ts = last_ts = None
         seen_reads = set()  # HASHED paths seen this session
@@ -209,7 +225,12 @@ def main() -> int:
         except Exception:
             continue
         with fh:
-            for ln in fh:
+            lines = list(fh)
+            if shuffle_seed is not None:
+                # Deterministic: the control must be reproducible, and a control
+                # you cannot re-run is not a control.
+                random.Random(shuffle_seed + _stable_key(fn)).shuffle(lines)
+            for ln in lines:
                 ln = ln.strip()
                 if not ln:
                     continue
@@ -422,11 +443,25 @@ def main() -> int:
 
     # Enforce the privacy guarantee before anything is written or printed.
     _audit(metrics)
+    return metrics
 
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("project_dir")
+    ap.add_argument("--out", default="")
+    args = ap.parse_args()
+
+    files = sorted(f for f in os.listdir(args.project_dir) if f.endswith(".jsonl"))
+    if not files:
+        print("no .jsonl files", file=sys.stderr)
+        return 1
+
+    metrics = aggregate(args.project_dir, files)
     out = json.dumps(metrics, indent=2)
     if args.out:
         open(args.out, "w").write(out)
-        print(f"wrote {args.out} ({n_sessions} sessions)")
+        print(f"wrote {args.out} ({metrics['sessions']} sessions)")
     print(out)
     return 0
 

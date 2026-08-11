@@ -225,3 +225,113 @@ def test_render_self_contained(monkeypatch):
     html = P.render_html(P.build_next_moves("x"))
     assert "CORTEX" in html and "<script src" not in html and "<link " not in html
     assert "cdn" not in html.lower() and html.count("</script>") == 1
+
+
+# ------------------------------------------------------------------ held-out evaluation
+def _dated(events, started):
+    s = P._session_stats(events, started)
+    return s
+
+
+def test_evaluation_is_measured_out_of_sample_on_a_chronological_split():
+    """The gates elsewhere control noise in the FITTED estimate, which is not the
+    same property as predicting. This is the only thing in the repo that scores
+    the model on sessions it was never fitted to."""
+    corpus = [
+        _dated([tool("Plan"), tool("Grep"), tool("Edit"), tool("Bash")] * 6,
+               "2026-01-%02dT00:00:00Z" % (d + 1))
+        for d in range(10)
+    ]
+    ev = P.evaluate_next_move(corpus)
+    assert ev is not None
+    assert ev["n_train_sessions"] + ev["n_test_sessions"] == 10
+    assert ev["n_test_sessions"] >= 1 and ev["n_train_sessions"] >= 1
+    assert ev["n_predictions"] > 0
+    # a perfectly cyclic corpus is exactly what a context model should nail
+    assert ev["top1_accuracy"] > ev["baseline_accuracy"]
+    assert ev["beats_baseline"] is True
+    assert P.predictive_claim_allowed(ev) is True
+
+
+def test_sessions_are_ordered_by_time_not_by_filename(tmp_path):
+    """Session filenames are UUIDs, so directory order is arbitrary. A split on
+    arbitrary order is not a held-out evaluation, it is a shuffle."""
+    def write(name, ts, tools):
+        lines = []
+        for t in tools:
+            lines.append(json.dumps({
+                "timestamp": ts,
+                "message": {"role": "assistant",
+                            "content": [{"type": "tool_use", "name": t}]},
+            }))
+        (tmp_path / name).write_text("\n".join(lines), encoding="utf-8")
+
+    write("zzz.jsonl", "2026-01-01T00:00:00Z", ["Read", "Edit"])
+    write("aaa.jsonl", "2026-06-01T00:00:00Z", ["Bash", "Grep"])
+    got = [s["started"] for s in P.parse_sessions(str(tmp_path))]
+    assert got == ["2026-01-01T00:00:00Z", "2026-06-01T00:00:00Z"], (
+        "sessions must be ordered chronologically, got %r" % got
+    )
+
+
+def test_a_model_that_cannot_beat_base_rate_is_reported_as_such():
+    """The outcome the review cares about most: an unflattering number must still
+    be produced, and must still be the one the wording is gated on."""
+    losing = {
+        "n_train_sessions": 8,
+        "n_test_sessions": 2,
+        "n_predictions": 400,
+        "context_coverage": 0.9,
+        "top1_accuracy": 0.31,
+        "baseline_accuracy": 0.44,
+        "accuracy_minus_baseline": -0.13,
+        "beats_baseline": False,
+    }
+    assert P.predictive_claim_allowed(losing) is False
+    # unmeasured is not the same as good
+    assert P.predictive_claim_allowed(None) is False
+
+
+def test_predictive_wording_is_suppressed_when_the_model_loses_to_base_rate():
+    """Acceptance for 3.1: the word is gated on the measured figure, on the card
+    itself and not only in the README."""
+    nudges = [{"family": "f", "title": "After Grep, Edit.", "body": "b",
+               "confidence": "high"}]
+    losing = {
+        "n_train_sessions": 8, "n_test_sessions": 2, "n_predictions": 400,
+        "context_coverage": 0.9, "top1_accuracy": 0.31, "baseline_accuracy": 0.44,
+        "accuracy_minus_baseline": -0.13, "beats_baseline": False,
+    }
+    html = P.render_html({
+        "kind": "next_moves", "nudges": nudges, "evaluation": losing,
+        "predictive": P.predictive_claim_allowed(losing), "footer": P.FOOTER,
+    })
+    assert "most predictable moment" not in html
+    assert "DOES NOT BEAT BASE RATE" in html
+    assert "31.0%" in html and "44.0%" in html, "the real numbers must be on the card"
+    assert "nothing below is a prediction" in html
+
+    winning = dict(losing, top1_accuracy=0.62, baseline_accuracy=0.44,
+                   accuracy_minus_baseline=0.18, beats_baseline=True)
+    html2 = P.render_html({
+        "kind": "next_moves", "nudges": nudges, "evaluation": winning,
+        "predictive": P.predictive_claim_allowed(winning), "footer": P.FOOTER,
+    })
+    assert "most predictable moment" in html2
+    assert "MEASURED OUT OF SAMPLE" in html2
+    assert "62.0%" in html2
+
+
+def test_an_unmeasured_report_never_claims_prediction():
+    html = P.render_html({
+        "kind": "next_moves",
+        "nudges": [{"family": "f", "title": "t.", "body": "b", "confidence": "low"}],
+        "evaluation": None, "predictive": False, "footer": P.FOOTER,
+    })
+    assert "most predictable moment" not in html
+    assert "NOT MEASURED" in html
+    assert "nothing here is claimed to predict anything" in html
+
+
+def test_evaluation_declines_rather_than_guessing_on_thin_history():
+    assert P.evaluate_next_move([sess([tool("Bash")]) for _ in range(3)]) is None

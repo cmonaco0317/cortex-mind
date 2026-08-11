@@ -7,11 +7,21 @@ what plain cosine-similarity nearest-neighbours already return. Builds a
 self-contained HTML rating sheet that puts the two BLIND, side by side, for a rater
 to judge — then scores the result.
 
-For each of ~20 source concepts it shows two connections:
+For each source concept it shows two connections:
   - BASELINE: the nearest neighbour by cosine similarity (the "obvious" match).
-  - ENGINE:   a moderately-similar-but-distant concept (a non-obvious leap).
+  - ENGINE:   the engine's own top-scored bridge for that source, from the SAME
+              rank_bridges() the product ships.
 Order is randomised and which-is-which is hidden. The rater marks which (if any)
 is a genuinely novel + useful connection.
+
+The engine arm used to be `rng.choice(order[i, 15:50])` -- a RANDOM pick from a
+rank band, which never touched the scoring at all. The harness therefore could
+not have detected a change to the score in either direction, because the score
+was not in the experiment. Both arms were one estimator sampled from two slices
+of one sorted list, and the design foreclosed the result before any rater saw it.
+The harness now prints, on every run, how far apart the arms actually are: how
+many resolve to the same concept (must be 0) and where the engine's pick sits in
+the plain-cosine ordering (the baseline is rank 0 by definition).
 
 Scoring is an exact two-sided binomial test against chance on the decisive ratings
 (the ones where a rater picked a side). It deliberately does NOT use a fixed
@@ -19,9 +29,13 @@ percentage bar: an earlier version passed the engine at >=30% wins, which is at 
 below chance once "neither" is an option, so it could report PASS while the baseline
 was actually preferred more than twice as often.
 
-Read the result narrowly. One rater at n=20 can show that *this* rater preferred one
-side on *this* corpus. It cannot establish a general effect, and the harness says so
-in its own output rather than implying otherwise.
+It also refuses to report a verdict it cannot earn. Detecting a 65/35 preference
+at 80% power (two-sided, alpha=0.05) needs 82 decisive ratings; below that the
+page prints the REQUIREMENT instead of a conclusion. "Inconclusive" at n=20 reads
+as weak evidence of no effect, and it is not -- it is no evidence at all.
+
+Read even a powered result narrowly: one rater on one corpus is one rater on one
+corpus, and the harness says so in its own output rather than implying otherwise.
 
 Usage (runs 100% locally; the HTML never leaves your machine):
   blind_test.py --corpus cortex/corpus_safe.json --out cortex/blind-test.html
@@ -31,19 +45,58 @@ Usage (runs 100% locally; the HTML never leaves your machine):
 import argparse
 import html
 import json
+import math
 import os
 import sys
 
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from build_brain import embed, ingest_folder  # noqa: E402
+from build_brain import embed, ingest_folder, rank_bridges  # noqa: E402
 
 
 def load_corpus(args: argparse.Namespace) -> list[dict]:
     if args.ingest:
         return ingest_folder(args.ingest, args.max)
     return json.load(open(args.corpus))
+
+
+# Detecting a preference this strong, at this power, with a two-sided exact
+# binomial test. Stated up front rather than chosen after seeing the data.
+EFFECT = 0.65  # a 65/35 split among decisive ratings
+ALPHA = 0.05
+POWER = 0.80
+
+
+def _binom_pmf(k: int, n: int, p: float) -> float:
+    return math.comb(n, k) * (p**k) * ((1 - p) ** (n - k))
+
+
+def _reject_region(n: int, alpha: float) -> set[int]:
+    """Two-sided exact-binomial rejection region against p=0.5: the most extreme
+    outcomes whose total probability under H0 stays within alpha."""
+    ks = sorted(range(n + 1), key=lambda k: (abs(k - n / 2), k), reverse=True)
+    region, mass = set(), 0.0
+    for k in ks:
+        m = _binom_pmf(k, n, 0.5)
+        if mass + m > alpha:
+            break
+        region.add(k)
+        mass += m
+    return region
+
+
+def required_n(effect: float = EFFECT, alpha: float = ALPHA, power: float = POWER) -> int:
+    """Smallest number of DECISIVE ratings with at least `power` chance of
+    detecting a true `effect` split. Exact, not a normal approximation."""
+    for n in range(4, 2001):
+        region = _reject_region(n, alpha)
+        if not region:
+            continue
+        achieved = sum(_binom_pmf(k, n, effect) for k in region)
+        if achieved >= power:
+            return n
+    return 2001
 
 
 def build_pairs(corpus: list[dict], n_rows: int, seed: int) -> list[dict]:
@@ -60,6 +113,20 @@ def build_pairs(corpus: list[dict], n_rows: int, seed: int) -> list[dict]:
 
     rng = np.random.default_rng(seed)
     n = len(corpus)
+    lo = min(12, max(2, n // 4))
+    hi = min(60, n - 1)
+    # The ENGINE arm is the engine's own top-scored bridge for that source, taken
+    # from the SAME rank_bridges() the product ships. It used to be
+    # `rng.choice(order[i, 15:50])` -- a random pick from a rank slice, which
+    # never touched the scoring at all: the harness could not have detected a
+    # change to the score, in either direction, because the score was not in it.
+    ranked = rank_bridges(sim, order, Xn, corpus, lo, hi)
+    best_for: dict[int, int] = {}
+    for c in ranked:  # already sorted most-surprising-first
+        for a, b in ((c["i"], c["j"]), (c["j"], c["i"])):
+            if a not in best_for:
+                best_for[a] = b
+
     sources = rng.choice(n, size=min(n_rows, n), replace=False)
     rows = []
     # Every concept is used at most once across the whole test — as a source OR an
@@ -74,19 +141,41 @@ def build_pairs(corpus: list[dict], n_rows: int, seed: int) -> list[dict]:
         )
         if baseline is None:
             continue
-        # engine = a moderately-similar-but-distant, still-unused concept (a leap)
-        band = [
-            int(j)
-            for j in order[i, 15:50]
-            if int(j) not in used and int(j) not in (i, baseline)
-        ]
-        if not band:
+        engine = best_for.get(i)
+        if engine is None or engine in used or engine in (i, baseline):
             continue
-        engine = int(rng.choice(band))
         used.add(baseline)
         used.add(engine)
-        rows.append({"source": i, "baseline": baseline, "engine": engine})
+        rows.append(
+            {
+                "source": i,
+                "baseline": baseline,
+                "engine": engine,
+                # how far down the plain-cosine ordering the engine's pick sits;
+                # rank 0 would mean the two arms are the same estimator
+                "engine_cosine_rank": int(np.where(order[i] == engine)[0][0]),
+            }
+        )
     return rows
+
+
+def report_distinctness(rows: list[dict]) -> dict:
+    """State, in the harness's own output, how far apart the two arms actually are.
+
+    §2.6's point: while the score was ~1.15 x cosine, treatment and control were
+    one estimator sampled from two slices of one sorted list, so the design
+    foreclosed the result before any rater saw it. A harness that cannot show its
+    arms are distinct is not evidence of anything.
+    """
+    ranks = [r["engine_cosine_rank"] for r in rows]
+    same = sum(1 for r in rows if r["engine"] == r["baseline"])
+    return {
+        "n_rows": len(rows),
+        "arms_identical": same,
+        "engine_cosine_rank_min": min(ranks) if ranks else None,
+        "engine_cosine_rank_median": int(sorted(ranks)[len(ranks) // 2]) if ranks else None,
+        "engine_cosine_rank_max": max(ranks) if ranks else None,
+    }
 
 
 def render_html(corpus: list[dict], rows: list[dict], name: str) -> str:
@@ -124,6 +213,8 @@ def render_html(corpus: list[dict], rows: list[dict], name: str) -> str:
         )
 
     payload = json.dumps(data).replace("</", "<\\/")  # safe to embed inline in <script>
+    effect, alpha, power = EFFECT, ALPHA, POWER
+    req_n = required_n()
     return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>Cortex — blind insight test ({html.escape(name)})</title>
 <style>
@@ -153,6 +244,12 @@ Corpus: <b>{html.escape(name)}</b> · {len(rows)} items. 100% local.</div>
 <div id="verdict"></div>
 <script>
 const DATA = {payload};
+// Power requirement, computed in Python before this page was written, so the
+// bar is fixed in advance rather than chosen after seeing the ratings.
+const EFFECT = {effect};
+const ALPHA = {alpha};
+const POWER = {power};
+const REQUIRED_N = {req_n};
 const shuffled = DATA.map(r => {{
   const o = r.options.slice();
   if (Math.random() < 0.5) o.reverse();
@@ -213,6 +310,17 @@ function score(){{
   if (decisive === 0) {{
     v.className='meh';
     v.innerHTML = tally + '<br>\\u2014 No decisive ratings: neither side was preferred anywhere. Inconclusive.' + caveat;
+  }} else if (decisive < REQUIRED_N) {{
+    // Underpowered is not the same as inconclusive. An underpowered run cannot
+    // support a claim in EITHER direction, and reporting it as "inconclusive"
+    // invites reading it as weak evidence of no effect. Print what would have
+    // been required instead of a verdict that cannot be earned at this n.
+    v.className='meh';
+    v.innerHTML = tally + '<br>\\u26D4 <b>NO VERDICT \\u2014 UNDERPOWERED.</b> '
+      + 'Detecting a ' + Math.round(EFFECT*100) + '/' + Math.round((1-EFFECT)*100)
+      + ' preference at ' + Math.round(POWER*100) + '% power (two-sided, \\u03B1=' + ALPHA + ') '
+      + 'needs <b>' + REQUIRED_N + ' decisive ratings</b>; this run has ' + decisive + '. '
+      + 'No conclusion is reported in either direction, because none can be.' + caveat;
   }} else if (p >= 0.05) {{
     v.className='meh';
     v.innerHTML = tally + '<br>\\u2014 <b>INCONCLUSIVE</b> at this sample size. The split is '
@@ -245,9 +353,34 @@ def main() -> int:
     open(args.out, "w").write(
         render_html(corpus, rows, name=os.path.basename(args.out))
     )
+    dist = report_distinctness(rows)
+    req = required_n()
     print(
         f"wrote {args.out}: {len(rows)} blind rating items. Open it and rate to get the verdict."
     )
+    # State the two things that decide whether this run can mean anything, in the
+    # harness's own output, before any rater is involved.
+    print("\narms distinctness (§2.6) — the engine arm is rank_bridges()' own top")
+    print(f"  pick for each source, NOT a random draw from a rank band:")
+    print(f"  rows                          : {dist['n_rows']}")
+    print(f"  arms identical (must be 0)    : {dist['arms_identical']}")
+    print(
+        "  engine pick's rank in the plain-cosine ordering: "
+        f"min {dist['engine_cosine_rank_min']}, "
+        f"median {dist['engine_cosine_rank_median']}, "
+        f"max {dist['engine_cosine_rank_max']}"
+    )
+    print(
+        f"\npower (§2.6): detecting a {EFFECT:.0%}/{1 - EFFECT:.0%} preference at "
+        f"{POWER:.0%} power, two-sided alpha={ALPHA}, needs {req} DECISIVE ratings."
+    )
+    if len(rows) < req:
+        print(
+            f"  this sheet has {len(rows)} items, so even a unanimous result cannot "
+            f"reach that bar. The page will report NO VERDICT rather than a\n"
+            f"  conclusion it has not earned. Raise --n to at least {req} "
+            f"(and expect some ratings to be 'neither')."
+        )
     return 0
 
 
