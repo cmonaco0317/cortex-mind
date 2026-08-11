@@ -3,6 +3,12 @@ name: Deploy demo to GitHub Pages
 on:
   push:
     branches: [main]
+  # Run the checks on PRs too. Without this the only thing that ever exercised
+  # them was a merge, so a problem was reported AFTER it had landed on main —
+  # which is how a stale `npm audit` figure sat in README.md and SECURITY.md
+  # until the first push that happened to run the test job.
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -11,7 +17,11 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  # Keyed by ref, NOT a single shared "pages" group. With one group and
+  # cancel-in-progress, opening a PR would cancel an in-flight deploy of main
+  # and leave the published site mid-update. Deploys still serialise with each
+  # other because they all run on refs/heads/main.
+  group: pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -162,6 +172,11 @@ jobs:
 
   deploy:
     needs: [test, build]
+    # Publish ONLY from main. The jobs above are the reason to run on a pull
+    # request; this one is the reason that would otherwise be dangerous, because
+    # it pushes whatever was built straight to the public site. A PR must be
+    # able to prove itself without being able to publish itself.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
