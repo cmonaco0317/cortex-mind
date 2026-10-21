@@ -15,3 +15,13 @@ agent-insights/report.json
 agent-insights/report.html
 agent-insights/next_moves.json
 agent-insights/whats_next.html
+
+# Local credentials, environments, and caches
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+.venv
+.pytest_cache/
